@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Los archivos de los discos del servidor: navegar, subir, descargar, mover y copiar.">
+  <meta name="theme-color" content="#f6f4f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#171516" media="(prefers-color-scheme: dark)">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Arca">
+  <link rel="apple-touch-icon" href="/iconos/apple-touch-icon.png?v=2">
+  <link rel="icon" href="/iconos/icono.svg?v=2" type="image/svg+xml">
+  <title>Arca</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/tema.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="marca" href="#" aria-label="Arca, ir al inicio">
+        <img src="/iconos/icono.svg?v=2" alt="" width="34" height="34">
+        <span class="marca-nombre">Arca</span>
+      </a>
+      <span class="miga" id="miga" hidden></span>
+      <div class="acciones-top" id="acciones-top" hidden>
+        <input type="search" id="buscar" class="buscar-top" placeholder="Buscar…" title="Busca en esta carpeta y en las de dentro" aria-label="Buscar" autocomplete="off" enterkeyhint="search">
+        <button class="btn-icono btn-tema" id="btn-tema" type="button"></button>
+        <button class="btn-icono btn-tema" id="btn-menu" type="button" aria-label="Menú" title="Menú"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="contenido" id="contenido"></main>
+
+  <div class="menu" id="menu" hidden></div>
+  <div class="tareas" id="tareas" hidden></div>
+  <div class="avisos" id="avisos" aria-live="polite"></div>
+  <noscript><p class="contenido">Arca necesita JavaScript.</p></noscript>
+</body>
+</html>

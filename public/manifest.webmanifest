@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "Arca",
+  "short_name": "Arca",
+  "description": "Los archivos de los discos del servidor: navegar, subir, descargar, mover y copiar.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f4f1",
+  "theme_color": "#9c5f17",
+  "icons": [
+    { "src": "/iconos/icono.svg?v=2", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/iconos/icono-192.png?v=2", "sizes": "192x192", "type": "image/png" },
+    { "src": "/iconos/icono-512.png?v=2", "sizes": "512x512", "type": "image/png" },
+    { "src": "/iconos/icono-maskable-512.png?v=2", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

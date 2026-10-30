@@ -1,0 +1,747 @@
+// Arca: interfaz. Un solo módulo, sin librerías.
+// Rutas (#): #/disco/carpeta/…  ·  #papelera/disco  ·  vacío = primer disco
+
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const contenido = $('#contenido');
+
+// ---------------------------------------------------------------------------
+// Iconos
+// ---------------------------------------------------------------------------
+const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const I = {
+  carpeta: svg('<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" fill="currentColor" fill-opacity=".14"/>'),
+  archivo: svg('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>'),
+  imagen: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="m21 16-5-5-8 9"/>'),
+  video: svg('<rect x="2.5" y="5" width="14" height="14" rx="2"/><path d="m16.5 10 5-3v10l-5-3"/>'),
+  audio: svg('<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>'),
+  pdf: svg('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 16.5h4"/>'),
+  texto: svg('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 11h6M9 14h6M9 17h4"/>'),
+  zip: svg('<path d="M6 3h12v18H6z"/><path d="M11 3v2h2v2h-2v2h2v2h-2v2h2"/><rect x="10" y="14" width="4" height="4" rx="1"/>'),
+  disco: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14h18M7 16.5h.01M10 16.5h.01"/>'),
+  papelera: svg('<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/>'),
+  subir: svg('<path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>'),
+  subirCarpeta: svg('<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M12 17v-6m0 0-2.5 2.5M12 11l2.5 2.5"/>'),
+  nuevaCarpeta: svg('<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M12 11v6M9 14h6"/>'),
+  descargar: svg('<path d="M12 4v12m0 0-4.5-4.5M12 16l4.5-4.5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>'),
+  copiar: svg('<rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>'),
+  mover: svg('<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M8.5 13.5h7m0 0-2.5-2.5m2.5 2.5L13 16"/>'),
+  renombrar: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'),
+  borrar: svg('<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/>'),
+  restaurar: svg('<path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v5h5"/>'),
+  cerrar: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  candado: svg('<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'),
+  lista: svg('<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>'),
+  cuadricula: svg('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'),
+  izquierda: svg('<path d="m15 18-6-6 6-6"/>'),
+  derecha: svg('<path d="m9 18 6-6-6-6"/>'),
+  arriba: svg('<path d="m18 15-6-6-6 6"/>'),
+  menu: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+  clave: svg('<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/>'),
+  salir: svg('<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3"/>'),
+  quitar: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  luna: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9.5" r="2"/><circle cx="15" cy="14.5" r="2.6"/><circle cx="9.2" cy="16" r="1"/></svg>`,
+  sol: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>`,
+};
+
+// ---------------------------------------------------------------------------
+// Utilidades
+// ---------------------------------------------------------------------------
+function tamano(b) {
+  if (b == null) return '';
+  if (b < 1024) return `${b} B`;
+  const u = ['KB', 'MB', 'GB', 'TB']; let i = -1;
+  do { b /= 1024; i++; } while (b >= 1024 && i < u.length - 1);
+  return `${b.toLocaleString('es-ES', { maximumFractionDigits: b < 10 ? 1 : 0 })} ${u[i]}`;
+}
+const fecha = (ms) => new Date(ms).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const ext = (n) => (n.match(/\.([^.]+)$/)?.[1] || '').toLowerCase();
+function claseDe(e) {
+  if (e.dir) return 'carpeta';
+  const x = ext(e.nombre);
+  if (/^(jpe?g|png|gif|webp|avif|bmp|svg|heic|tiff?)$/.test(x)) return 'imagen';
+  if (/^(mp4|m4v|webm|mov|mkv|avi|wmv|mpe?g|ts|3gp)$/.test(x)) return 'video';
+  if (/^(mp3|m4a|m4b|aac|ogg|opus|flac|wav|wma|aiff?)$/.test(x)) return 'audio';
+  if (x === 'pdf') return 'pdf';
+  if (/^(zip|rar|7z|tar|gz|bz2|xz)$/.test(x)) return 'zip';
+  if (/^(txt|md|csv|log|json|xml|ini|ya?ml|srt|vtt|conf|sh|js|py|html?|css)$/.test(x)) return 'texto';
+  return 'archivo';
+}
+const previsualizable = (e) => ['imagen', 'video', 'audio', 'pdf', 'texto'].includes(claseDe(e)) && !/^(heic|tiff?|avi|wmv|mkv|mpe?g|ts|wma|aiff?)$/.test(ext(e.nombre));
+const url = (ruta, extra = '') => `/api/archivo?ruta=${encodeURIComponent(ruta)}${extra}`;
+
+function aviso(msg, error = false) {
+  const d = document.createElement('div');
+  d.className = 'aviso' + (error ? ' error' : '');
+  d.textContent = msg; $('#avisos').appendChild(d);
+  setTimeout(() => d.remove(), error ? 6000 : 3500);
+}
+
+async function api(ruta, { metodo = 'GET', datos } = {}) {
+  const r = await fetch(ruta, {
+    method: metodo, credentials: 'same-origin',
+    headers: datos !== undefined ? { 'Content-Type': 'application/json', 'X-Arca': '1' } : metodo !== 'GET' ? { 'X-Arca': '1' } : {},
+    body: datos !== undefined ? JSON.stringify(datos) : undefined,
+  });
+  if (r.status === 401 && ruta !== '/api/entrar') { pantallaAcceso(); throw new Error('Hay que entrar'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  return j;
+}
+
+// Diálogo genérico: devuelve una promesa con el valor o null
+function dialogo({ titulo, texto = '', cuerpo = '', botones = [['Cancelar', null], ['Aceptar', true, 'acento']], alMontar }) {
+  return new Promise((ok) => {
+    const velo = document.createElement('div');
+    velo.className = 'velo';
+    velo.innerHTML = `<div class="dialogo" role="dialog" aria-modal="true"><header><h2>${esc(titulo)}</h2>${texto ? `<p>${esc(texto)}</p>` : ''}</header>
+      ${cuerpo ? `<div class="cuerpo">${cuerpo}</div>` : ''}<footer>${botones.map(([t, v, c], k) => `<button type="button" class="btn ${c || ''}" data-k="${k}">${esc(t)}</button>`).join('')}</footer></div>`;
+    const cerrar = (v) => { velo.remove(); removeEventListener('keydown', tecla); ok(v); };
+    const tecla = (e) => { if (e.key === 'Escape') cerrar(null); };
+    addEventListener('keydown', tecla);
+    velo.addEventListener('click', (e) => {
+      if (e.target === velo) return cerrar(null);
+      const b = e.target.closest('footer [data-k]'); if (!b) return;
+      const v = botones[Number(b.dataset.k)][1];
+      cerrar(typeof v === 'function' ? v(velo) : v);
+    });
+    document.body.appendChild(velo);
+    alMontar?.(velo, cerrar);
+    ($('input', velo) || $('footer .acento', velo))?.focus();
+  });
+}
+async function pedirTexto(titulo, valor = '', texto = '') {
+  return dialogo({
+    titulo, texto, cuerpo: `<input type="text" class="campo-texto" style="width:100%" value="${esc(valor)}">`,
+    botones: [['Cancelar', null], ['Aceptar', (v) => $('input', v).value.trim() || null, 'acento']],
+    alMontar: (v, cerrar) => {
+      const i = $('input', v);
+      const punto = valor.lastIndexOf('.');
+      i.setSelectionRange(0, punto > 0 ? punto : valor.length);
+      i.addEventListener('keydown', (e) => { if (e.key === 'Enter') cerrar(i.value.trim() || null); });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Estado
+// ---------------------------------------------------------------------------
+const estado = {
+  discos: [], ruta: '', entradas: [], protegida: false, sel: new Set(), ultimo: null,
+  orden: leerPref('orden', 'nombre'), asc: leerPref('asc', '1') === '1', vista: leerPref('vista', 'lista'),
+  busqueda: '', resultados: null,
+};
+function leerPref(k, d) { try { return localStorage.getItem('arca.' + k) ?? d; } catch { return d; } }
+function guardarPref(k, v) { try { localStorage.setItem('arca.' + k, v); } catch {} }
+
+// ---------------------------------------------------------------------------
+// Tema y menú
+// ---------------------------------------------------------------------------
+const btnTema = $('#btn-tema');
+function pintarTema() {
+  const o = document.documentElement.dataset.theme === 'dark';
+  btnTema.innerHTML = o ? I.sol : I.luna;
+  btnTema.title = btnTema.ariaLabel = o ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro';
+}
+btnTema.addEventListener('click', () => {
+  const n = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = n;
+  try { localStorage.setItem('arca.tema', n); } catch {}
+  pintarTema();
+});
+pintarTema();
+
+const menu = $('#menu');
+$('#btn-menu').innerHTML = I.menu;
+$('#btn-menu').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!menu.hidden) { menu.hidden = true; return; }
+  menu.innerHTML = `<small>Conectado como <b>${esc(estado.usuario || '')}</b></small>
+    ${estado.discos.map((d) => `<button type="button" data-m="papelera:${esc(d.nombre)}">${I.papelera}Papelera de ${esc(d.nombre)}</button>`).join('')}
+    <button type="button" data-m="clave">${I.clave}Cambiar la contraseña</button>
+    <button type="button" data-m="salir">${I.salir}Salir</button>`;
+  menu.hidden = false;
+});
+addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target)) menu.hidden = true; });
+menu.addEventListener('click', async (e) => {
+  const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return;
+  menu.hidden = true;
+  if (m.startsWith('papelera:')) location.hash = `#papelera/${encodeURIComponent(m.slice(9))}`;
+  if (m === 'salir') { await api('/api/salir', { metodo: 'POST', datos: {} }).catch(() => {}); pantallaAcceso(); }
+  if (m === 'clave') {
+    const r = await dialogo({
+      titulo: 'Cambiar la contraseña', texto: 'Se cerrará la sesión en los demás dispositivos.',
+      cuerpo: `<label class="campo">Contraseña actual <input type="password" name="actual" autocomplete="current-password"></label>
+        <label class="campo">Contraseña nueva <input type="password" name="nueva" autocomplete="new-password"></label>
+        <label class="campo">Repítela <input type="password" name="otra" autocomplete="new-password"></label>`,
+      botones: [['Cancelar', null], ['Cambiar', (v) => ({ actual: $('[name=actual]', v).value, nueva: $('[name=nueva]', v).value, otra: $('[name=otra]', v).value }), 'acento']],
+    });
+    if (!r) return;
+    if (r.nueva !== r.otra) return aviso('Las dos contraseñas nuevas no coinciden', true);
+    try { await api('/api/clave', { metodo: 'POST', datos: { actual: r.actual, nueva: r.nueva } }); aviso('Contraseña cambiada'); }
+    catch (err) { aviso(err.message, true); }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Entrar
+// ---------------------------------------------------------------------------
+function pantallaAcceso() {
+  $('#acciones-top').hidden = true; $('#miga').hidden = true; $('#tareas').hidden = true;
+  contenido.innerHTML = `<form class="acceso" autocomplete="on">
+    <h1>Arca</h1><p>Los archivos de los discos del servidor.</p>
+    <label class="campo">Usuario <input name="usuario" autocomplete="username" autocapitalize="none" required></label>
+    <label class="campo">Contraseña <input name="clave" type="password" autocomplete="current-password" required></label>
+    <p class="error-acceso"></p>
+    <button class="btn acento grande" type="submit">Entrar</button></form>`;
+  const f = $('form', contenido);
+  $('[name=usuario]', f).focus();
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const b = $('button', f); b.disabled = true;
+    try {
+      await api('/api/entrar', { metodo: 'POST', datos: { usuario: f.usuario.value.trim(), clave: f.clave.value } });
+      await arrancar();
+    } catch (err) { $('.error-acceso', f).textContent = err.message; b.disabled = false; }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Arranque y rutas
+// ---------------------------------------------------------------------------
+async function arrancar() {
+  try {
+    const yo = await api('/api/yo');
+    estado.usuario = yo.usuario; estado.diasPapelera = yo.diasPapelera;
+  } catch { return; }
+  $('#acciones-top').hidden = false;
+  await cargarDiscos();
+  rutar();
+}
+async function cargarDiscos() {
+  try { estado.discos = await api('/api/espacio'); } catch (e) { aviso(e.message, true); }
+}
+function rutaDelHash() {
+  const h = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
+  if (h.startsWith('papelera/')) return { papelera: h.slice(9) };
+  return { ruta: h.replace(/\/+$/, '') || estado.discos[0]?.nombre || '' };
+}
+const irA = (ruta) => { location.hash = '#/' + ruta.split('/').map(encodeURIComponent).join('/'); };
+addEventListener('hashchange', () => { if (estado.usuario) rutar(); });
+
+async function rutar() {
+  const r = rutaDelHash();
+  estado.sel.clear(); estado.busqueda = ''; estado.resultados = null; $('#buscar').value = '';
+  if (r.papelera) return verPapelera(r.papelera);
+  await abrirCarpeta(r.ruta);
+}
+
+// ---------------------------------------------------------------------------
+// Explorador
+// ---------------------------------------------------------------------------
+function marco() {
+  if (!$('.arca', contenido)) {
+    contenido.innerHTML = `<div class="arca"><aside class="lateral"></aside><section class="explorador"></section></div>`;
+  }
+  pintarLateral();
+  return $('.explorador', contenido);
+}
+function pintarLateral() {
+  const lat = $('.lateral', contenido); if (!lat) return;
+  const r = rutaDelHash();
+  const actual = (r.ruta || '').split('/')[0];
+  lat.innerHTML = `<h3>Discos</h3>${estado.discos.map((d) => {
+    const usado = d.total ? (d.total - d.libre) / d.total : 0;
+    return `<a class="disco ${!r.papelera && d.nombre === actual ? 'activo' : ''}" href="#/${encodeURIComponent(d.nombre)}" data-soltar="${esc(d.nombre)}">
+      <b>${I.disco}${esc(d.nombre)}</b><div class="barra"><i class="${usado > 0.92 ? 'lleno' : ''}" style="width:${(usado * 100).toFixed(1)}%"></i></div>
+      <small>${d.error ? esc(d.error) : `${tamano(d.libre)} libres de ${tamano(d.total)}`}</small></a>`;
+  }).join('')}
+  ${estado.discos.map((d) => `<a class="enlace-lateral ${r.papelera === d.nombre ? 'activo' : ''}" href="#papelera/${encodeURIComponent(d.nombre)}">${I.papelera}Papelera de ${esc(d.nombre)}</a>`).join('')}`;
+}
+
+async function abrirCarpeta(ruta) {
+  const ex = marco();
+  try {
+    const r = await api(`/api/lista?ruta=${encodeURIComponent(ruta)}`);
+    estado.ruta = r.ruta; estado.entradas = r.entradas; estado.protegida = r.protegida;
+  } catch (e) {
+    ex.innerHTML = `<div class="vacio">${esc(e.message)}<small><a href="#">Volver al inicio</a></small></div>`;
+    return;
+  }
+  const miga = $('#miga'); miga.hidden = false; miga.textContent = estado.ruta.split('/').at(-1);
+  document.title = `${estado.ruta.split('/').at(-1)} · Arca`;
+  pintarExplorador();
+}
+
+function ordenadas(lista) {
+  const f = { nombre: (a, b) => a.nombre.localeCompare(b.nombre, 'es', { numeric: true, sensitivity: 'base' }), tam: (a, b) => (a.tam || 0) - (b.tam || 0), mod: (a, b) => a.mod - b.mod }[estado.orden];
+  return [...lista].sort((a, b) => (b.dir - a.dir) || (estado.asc ? 1 : -1) * f(a, b) || a.nombre.localeCompare(b.nombre, 'es', { numeric: true }));
+}
+const rutaDe = (e) => e.ruta || `${estado.ruta}/${e.nombre}`;
+const visibles = () => (estado.resultados ? estado.resultados : ordenadas(estado.entradas));
+
+function pintarExplorador() {
+  const ex = $('.explorador', contenido); if (!ex) return;
+  const partes = estado.ruta.split('/');
+  const soloLectura = estado.protegida;
+  ex.innerHTML = `
+    <nav class="ruta-barra" aria-label="Ruta">${partes.map((p, k) => `${k ? '<span class="sep">/</span>' : ''}<a href="#/${partes.slice(0, k + 1).map(encodeURIComponent).join('/')}" data-soltar="${esc(partes.slice(0, k + 1).join('/'))}">${esc(p)}</a>`).join('')}
+      ${soloLectura ? `<span class="candado" title="La usa Immich: se puede ver, descargar y copiar a otro sitio">${I.candado}Solo lectura</span>` : ''}</nav>
+    <div class="herr-barra">
+      <button type="button" class="btn" data-a="subir" ${soloLectura ? 'disabled' : ''}>${I.subir}<span class="txt">Subir archivos</span></button>
+      <button type="button" class="btn" data-a="subir-carpeta" ${soloLectura ? 'disabled' : ''}>${I.subirCarpeta}<span class="txt">Subir carpeta</span></button>
+      <button type="button" class="btn" data-a="nueva" ${soloLectura ? 'disabled' : ''}>${I.nuevaCarpeta}<span class="txt">Nueva carpeta</span></button>
+      <span class="hueco"></span>
+      <select data-a="orden" aria-label="Ordenar por">
+        ${[['nombre', 'Nombre'], ['mod', 'Fecha'], ['tam', 'Tamaño']].map(([v, t]) => `<option value="${v}" ${estado.orden === v ? 'selected' : ''}>${t}</option>`).join('')}
+      </select>
+      <button type="button" class="btn-icono" data-a="sentido" title="${estado.asc ? 'Ascendente' : 'Descendente'}" aria-label="Cambiar el sentido">${estado.asc ? I.arriba : `<span style="display:inline-flex;transform:rotate(180deg)">${I.arriba}</span>`}</button>
+      <button type="button" class="btn-icono" data-a="vista" title="${estado.vista === 'lista' ? 'Ver en cuadrícula' : 'Ver en lista'}" aria-label="Cambiar la vista">${estado.vista === 'lista' ? I.cuadricula : I.lista}</button>
+      <input type="file" multiple hidden data-entrada="archivos"><input type="file" multiple hidden webkitdirectory data-entrada="carpeta">
+    </div>
+    <div class="seleccion-barra" hidden></div>
+    <div class="lista ${estado.vista === 'cuadricula' ? 'cuadricula' : ''}"></div>`;
+  pintarLista();
+}
+
+function iconoFila(e) {
+  const c = claseDe(e);
+  if (c === 'imagen' && estado.vista === 'cuadricula' && !/^(heic|tiff?)$/.test(ext(e.nombre))) {
+    const r = rutaDe(e);
+    // Primero la miniatura que llevan dentro las fotos; si no hay y la imagen es pequeña, la imagen
+    return `<img loading="lazy" alt="" src="/api/miniatura?ruta=${encodeURIComponent(r)}" data-completa="${e.tam < 4 * 1024 * 1024 ? esc(url(r)) : ''}">`;
+  }
+  return I[c] || I.archivo;
+}
+
+function pintarLista() {
+  const lista = $('.lista', contenido); if (!lista) return;
+  const ents = visibles();
+  const cab = estado.resultados ? '' : `<div class="fila-arch cab"><span class="marcar"><input type="checkbox" data-a="todo" aria-label="Elegir todo" ${ents.length && estado.sel.size === ents.length ? 'checked' : ''}></span><span></span>
+    <button type="button" data-ordenar="nombre">Nombre</button><button type="button" data-ordenar="tam" style="text-align:right">Tamaño</button><button type="button" data-ordenar="mod" style="text-align:right">Modificado</button></div>`;
+  if (!ents.length) {
+    lista.innerHTML = cab + `<div class="vacio">${estado.resultados ? 'No hay nada con ese nombre' : 'Carpeta vacía'}${!estado.resultados && !estado.protegida ? '<small>Arrastra archivos aquí o usa «Subir archivos»</small>' : ''}</div>`;
+  } else {
+    lista.innerHTML = cab + ents.map((e, k) => {
+      const r = rutaDe(e);
+      return `<div class="fila-arch ${estado.sel.has(r) ? 'sel' : ''}" data-k="${k}" draggable="true" ${e.dir ? `data-soltar="${esc(r)}"` : ''}>
+        <span class="marcar"><input type="checkbox" ${estado.sel.has(r) ? 'checked' : ''} aria-label="Elegir ${esc(e.nombre)}"></span>
+        <span class="ico ${claseDe(e)}">${iconoFila(e)}</span>
+        <span class="nombre"><b title="${esc(e.nombre)}">${esc(e.nombre)}${e.protegida ? `<span class="solo-lectura" title="Solo lectura">${I.candado}</span>` : ''}</b>
+          ${estado.resultados ? `<small>${esc(r.split('/').slice(0, -1).join(' / '))}</small>` : `<small class="solo-movil">${e.dir ? '' : tamano(e.tam) + ' · '}${fecha(e.mod)}</small>`}</span>
+        <span class="tam">${e.dir ? '' : tamano(e.tam)}</span><span class="fecha">${fecha(e.mod)}</span></div>`;
+    }).join('');
+  }
+  lista.classList.toggle('seleccionando', estado.sel.size > 0);
+  $$('img[data-completa]', lista).forEach((img) => img.addEventListener('error', () => {
+    const c = img.dataset.completa;
+    if (c && img.src.indexOf('/api/archivo') < 0) img.src = c; else img.replaceWith(document.createRange().createContextualFragment(I.imagen));
+  }));
+  pintarSeleccion();
+}
+// En pantallas grandes la línea pequeña bajo el nombre sobra (hay columnas)
+document.head.insertAdjacentHTML('beforeend', '<style>@media (min-width: 901px) { .lista:not(.cuadricula) .fila-arch .solo-movil { display: none; } }</style>');
+
+function elegidas() { return visibles().filter((e) => estado.sel.has(rutaDe(e))); }
+function pintarSeleccion() {
+  const barra = $('.seleccion-barra', contenido); if (!barra) return;
+  const n = estado.sel.size;
+  barra.hidden = !n;
+  if (!n) return;
+  const sel = elegidas();
+  const bloqueada = sel.some((e) => e.protegida) || estado.protegida;
+  barra.innerHTML = `<span class="cuenta">${n} elegido${n === 1 ? '' : 's'}</span>
+    <button type="button" class="btn" data-s="descargar">${I.descargar}<span class="txt">Descargar</span></button>
+    <button type="button" class="btn" data-s="copiar">${I.copiar}<span class="txt">Copiar a…</span></button>
+    <button type="button" class="btn" data-s="mover" ${bloqueada ? 'disabled' : ''}>${I.mover}<span class="txt">Mover a…</span></button>
+    ${n === 1 ? `<button type="button" class="btn" data-s="renombrar" ${bloqueada ? 'disabled' : ''}>${I.renombrar}<span class="txt">Renombrar</span></button>` : ''}
+    <button type="button" class="btn peligro" data-s="borrar" ${bloqueada ? 'disabled' : ''}>${I.borrar}<span class="txt">Borrar</span></button>
+    <button type="button" class="btn-icono" data-s="nada" title="Quitar la selección" aria-label="Quitar la selección" style="color:inherit">${I.quitar}</button>`;
+}
+
+// Clics en el explorador
+contenido.addEventListener('click', async (e) => {
+  const ex = e.target.closest('.explorador'); if (!ex) return;
+  const a = e.target.closest('[data-a]')?.dataset.a;
+  if (a === 'subir') return $('[data-entrada=archivos]', ex).click();
+  if (a === 'subir-carpeta') return $('[data-entrada=carpeta]', ex).click();
+  if (a === 'nueva') {
+    const n = await pedirTexto('Nueva carpeta', '', `Dentro de «${estado.ruta}»`);
+    if (!n) return;
+    try { await api('/api/carpeta', { metodo: 'POST', datos: { ruta: estado.ruta, nombre: n } }); await recargar(); }
+    catch (err) { aviso(err.message, true); }
+    return;
+  }
+  if (a === 'sentido') { estado.asc = !estado.asc; guardarPref('asc', estado.asc ? '1' : '0'); return pintarExplorador(); }
+  if (a === 'vista') { estado.vista = estado.vista === 'lista' ? 'cuadricula' : 'lista'; guardarPref('vista', estado.vista); return pintarExplorador(); }
+  if (a === 'todo') {
+    const ents = visibles();
+    estado.sel = e.target.checked ? new Set(ents.map(rutaDe)) : new Set();
+    return pintarLista();
+  }
+  const ord = e.target.closest('[data-ordenar]')?.dataset.ordenar;
+  if (ord) { if (estado.orden === ord) estado.asc = !estado.asc; else { estado.orden = ord; estado.asc = true; } guardarPref('orden', estado.orden); guardarPref('asc', estado.asc ? '1' : '0'); return pintarExplorador(); }
+
+  const s = e.target.closest('[data-s]')?.dataset.s;
+  if (s) return accionSeleccion(s);
+
+  const fila = e.target.closest('.fila-arch[data-k]'); if (!fila) return;
+  const ents = visibles(), k = Number(fila.dataset.k), ent = ents[k], r = rutaDe(ent);
+  // Casilla, Ctrl/Cmd o Mayús: elegir. Si no: abrir.
+  if (e.target.closest('.marcar') || e.ctrlKey || e.metaKey || e.shiftKey || estado.sel.size && e.target.closest('.marcar')) {
+    if (e.shiftKey && estado.ultimo != null) {
+      const [i, j] = [Math.min(estado.ultimo, k), Math.max(estado.ultimo, k)];
+      for (let x = i; x <= j; x++) estado.sel.add(rutaDe(ents[x]));
+    } else if (estado.sel.has(r)) estado.sel.delete(r); else estado.sel.add(r);
+    estado.ultimo = k;
+    return pintarLista();
+  }
+  if (ent.dir) return irA(r);
+  abrirPrevia(ents, k);
+});
+contenido.addEventListener('change', (e) => {
+  if (e.target.matches('[data-a=orden]')) { estado.orden = e.target.value; guardarPref('orden', estado.orden); return pintarExplorador(); }
+  if (e.target.matches('[data-entrada]')) {
+    const files = [...e.target.files];
+    subirArchivos(files.map((f) => ({ archivo: f, sub: (f.webkitRelativePath || '').split('/').slice(0, -1).join('/') })), estado.ruta);
+    e.target.value = '';
+  }
+});
+
+async function recargar() { await Promise.all([cargarDiscos(), abrirCarpeta(estado.ruta)]); }
+
+async function accionSeleccion(s) {
+  const sel = elegidas(), rutas = sel.map(rutaDe);
+  if (s === 'nada') { estado.sel.clear(); return pintarLista(); }
+  if (s === 'descargar') {
+    if (sel.length === 1 && !sel[0].dir) return descargar(url(rutas[0], '&descargar=1'));
+    return descargar(`/api/zip?rutas=${encodeURIComponent(JSON.stringify(rutas))}`);
+  }
+  if (s === 'renombrar') {
+    const n = await pedirTexto('Renombrar', sel[0].nombre);
+    if (!n || n === sel[0].nombre) return;
+    try { await api('/api/renombrar', { metodo: 'POST', datos: { ruta: rutas[0], nombre: n } }); estado.sel.clear(); await recargar(); }
+    catch (err) { aviso(err.message, true); }
+  }
+  if (s === 'borrar') {
+    const n = sel.length;
+    const ok = await dialogo({ titulo: `¿Borrar ${n === 1 ? `«${sel[0].nombre}»` : `${n} elementos`}?`, texto: `Van a la papelera de su disco y se pueden recuperar durante ${estado.diasPapelera} días.`, botones: [['Cancelar', null], ['Borrar', true, 'acento']] });
+    if (!ok) return;
+    try { await api('/api/borrar', { metodo: 'POST', datos: { rutas } }); aviso(n === 1 ? 'Enviado a la papelera' : `${n} elementos enviados a la papelera`); estado.sel.clear(); await recargar(); }
+    catch (err) { aviso(err.message, true); }
+  }
+  if (s === 'copiar' || s === 'mover') {
+    const destino = await elegirDestino(s === 'copiar' ? 'Copiar a…' : 'Mover a…', rutas, s);
+    if (destino) lanzarTarea(s, rutas, destino);
+  }
+}
+function descargar(href) {
+  const a = document.createElement('a'); a.href = href; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+}
+
+// Elegir carpeta de destino (navegando por los discos)
+async function elegirDestino(titulo, rutas, tipo) {
+  let actual = estado.ruta;
+  return dialogo({
+    titulo, texto: `${rutas.length === 1 ? `«${rutas[0].split('/').at(-1)}»` : `${rutas.length} elementos`}`,
+    cuerpo: '<div class="selector-ruta"></div><div class="selector"></div>',
+    botones: [['Cancelar', null], [tipo === 'copiar' ? 'Copiar aquí' : 'Mover aquí', () => actual, 'acento']],
+    alMontar: (v) => {
+      const pintar = async () => {
+        const btn = $('footer .acento', v);
+        $('.selector-ruta', v).innerHTML = `${actual ? `<button type="button" class="btn-icono" data-ir=".." title="Subir un nivel" aria-label="Subir un nivel">${I.izquierda}</button>` : ''}<span>${esc(actual || 'Discos')}</span>`;
+        if (!actual) {
+          $('.selector', v).innerHTML = estado.discos.map((d) => `<div class="sitio" data-ir="${esc(d.nombre)}">${I.disco}${esc(d.nombre)}</div>`).join('');
+          btn.disabled = true; return;
+        }
+        let r; try { r = await api(`/api/lista?ruta=${encodeURIComponent(actual)}`); } catch (e) { aviso(e.message, true); return; }
+        const dentro = (x) => rutas.some((o) => x === o || x.startsWith(o + '/'));
+        const carpetas = r.entradas.filter((x) => x.dir).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { numeric: true }));
+        $('.selector', v).innerHTML = carpetas.length
+          ? carpetas.map((c) => { const cr = `${actual}/${c.nombre}`; return `<div class="sitio ${dentro(cr) ? 'no' : ''}" data-ir="${dentro(cr) ? '' : esc(cr)}">${I.carpeta}${esc(c.nombre)}${c.protegida ? ` ${I.candado}` : ''}</div>`; }).join('')
+          : '<div class="vacio" style="padding:20px">Sin carpetas dentro</div>';
+        const mismo = tipo === 'mover' && rutas.every((o) => o.split('/').slice(0, -1).join('/') === actual);
+        btn.disabled = r.protegida || dentro(actual) || mismo;
+        btn.title = r.protegida ? 'Carpeta de solo lectura' : mismo ? 'Ya está aquí' : '';
+      };
+      v.addEventListener('click', (e) => {
+        const ir = e.target.closest('[data-ir]')?.dataset.ir; if (ir === undefined || ir === '') return;
+        actual = ir === '..' ? actual.split('/').slice(0, -1).join('/') : ir;
+        pintar();
+      });
+      pintar();
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tareas: subidas (en el navegador) y mover/copiar (en el servidor)
+// ---------------------------------------------------------------------------
+const panelTareas = $('#tareas');
+const subidas = []; // { id, nombre, total, hechos, estado, xhr, error }
+let tareasServidor = [];
+let tCerrarTareas = null;
+let sondeo = null;
+
+function pintarTareas() {
+  const lista = [
+    ...subidas.map((s) => ({ ...s, tipo: 'subir', descripcion: `Subir «${s.nombre}»` })),
+    ...tareasServidor,
+  ];
+  if (!lista.length) { panelTareas.hidden = true; return; }
+  const activas = lista.filter((t) => t.estado === 'en marcha' || t.estado === 'esperando').length;
+  // Si todo ha ido bien, el panel se cierra solo al rato
+  clearTimeout(tCerrarTareas);
+  if (!activas && !lista.some((t) => t.estado === 'error')) tCerrarTareas = setTimeout(() => { subidas.length = 0; tareasServidor = []; vistas.clear(); panelTareas.hidden = true; }, 5000);
+  panelTareas.hidden = false;
+  const plegado = panelTareas.classList.contains('plegado');
+  panelTareas.innerHTML = `<header><span>${activas ? `${activas} en marcha` : 'Terminado'}</span>
+    <button type="button" class="btn-icono" data-t="plegar" aria-label="${plegado ? 'Desplegar' : 'Plegar'}">${plegado ? I.arriba : `<span style="display:inline-flex;transform:rotate(180deg)">${I.arriba}</span>`}</button>
+    ${activas ? '' : `<button type="button" class="btn-icono" data-t="cerrar" aria-label="Cerrar">${I.cerrar}</button>`}</header>
+    <div class="lista-tareas">${lista.slice().reverse().map((t) => {
+      const pct = t.total ? Math.min(100, (t.hechos / t.total) * 100) : t.estado === 'hecho' ? 100 : 0;
+      const info = t.estado === 'error' ? t.error : t.estado === 'hecho' ? 'Hecho' : t.estado === 'esperando' ? 'En espera' : `${tamano(t.hechos)} de ${tamano(t.total)}${t.actual ? ` · ${t.actual}` : ''}`;
+      return `<div class="tarea ${t.estado === 'error' ? 'error' : ''}"><div class="linea"><span title="${esc(t.descripcion)}">${esc(t.descripcion)}</span>
+        ${t.tipo === 'subir' && (t.estado === 'en marcha' || t.estado === 'esperando') ? `<button type="button" class="btn-icono" data-t="cancelar:${t.id}" aria-label="Cancelar">${I.cerrar}</button>` : ''}</div>
+        <small>${esc(info)}</small>${t.estado === 'en marcha' || t.estado === 'esperando' ? `<progress max="100" value="${pct.toFixed(1)}"></progress>` : ''}</div>`;
+    }).join('')}</div>`;
+}
+panelTareas.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-t]')?.dataset.t; if (!t) return;
+  if (t === 'plegar') { panelTareas.classList.toggle('plegado'); pintarTareas(); }
+  if (t === 'cerrar') { subidas.length = 0; tareasServidor = []; vistas.clear(); pintarTareas(); }
+  if (t.startsWith('cancelar:')) { const s = subidas.find((x) => x.id === t.slice(9)); if (s) { s.cancelada = true; s.xhr?.abort(); s.estado = 'error'; s.error = 'Cancelada'; pintarTareas(); } }
+});
+
+// Sube en orden, de dos en dos
+let subiendo = 0;
+function subirArchivos(items, carpeta) {
+  if (!items.length) return;
+  if (estado.protegida && carpeta === estado.ruta) return aviso('Esta carpeta es de solo lectura', true);
+  for (const it of items) subidas.push({ id: Math.random().toString(36).slice(2), nombre: it.sub ? `${it.sub}/${it.archivo.name}` : it.archivo.name, total: it.archivo.size, hechos: 0, estado: 'esperando', archivo: it.archivo, sub: it.sub, carpeta });
+  pintarTareas();
+  siguienteSubida();
+}
+function siguienteSubida() {
+  while (subiendo < 2) {
+    const s = subidas.find((x) => x.estado === 'esperando'); if (!s) break;
+    subiendo++; s.estado = 'en marcha';
+    const xhr = new XMLHttpRequest(); s.xhr = xhr;
+    const q = new URLSearchParams({ carpeta: s.carpeta, nombre: s.archivo.name }); if (s.sub) q.set('subcarpeta', s.sub);
+    xhr.open('PUT', `/api/subir?${q}`);
+    xhr.setRequestHeader('X-Arca', '1');
+    xhr.upload.onprogress = (e) => { s.hechos = e.loaded; pintarTareasPronto(); };
+    xhr.onloadend = () => {
+      subiendo--;
+      if (!s.cancelada) {
+        if (xhr.status === 200) { s.estado = 'hecho'; s.hechos = s.total; }
+        else { s.estado = 'error'; try { s.error = JSON.parse(xhr.responseText).error; } catch { s.error = xhr.status ? `Error ${xhr.status}` : 'Se cortó la conexión'; } }
+        if (xhr.status === 401) pantallaAcceso();
+      }
+      pintarTareas();
+      if (!subidas.some((x) => x.estado === 'esperando' || x.estado === 'en marcha')) {
+        const mal = subidas.filter((x) => x.estado === 'error' && !x.cancelada).length;
+        aviso(mal ? `${mal} subida(s) con error` : 'Subida terminada', !!mal);
+        if (s.carpeta === estado.ruta || estado.ruta.startsWith(s.carpeta)) recargar();
+      }
+      siguienteSubida();
+    };
+    xhr.send(s.archivo);
+  }
+}
+let tPintar = null;
+const pintarTareasPronto = () => { if (!tPintar) tPintar = setTimeout(() => { tPintar = null; pintarTareas(); }, 250); };
+
+const vistas = new Set();
+async function lanzarTarea(tipo, rutas, destino) {
+  try {
+    const t = await api(`/api/${tipo}`, { metodo: 'POST', datos: { rutas, destino } });
+    tareasServidor.push(t); vistas.add(t.id); estado.sel.clear(); pintarLista(); pintarTareas();
+    vigilarTareas();
+  } catch (err) { aviso(err.message, true); }
+}
+function vigilarTareas() {
+  if (sondeo) return;
+  sondeo = setInterval(async () => {
+    let todas; try { todas = await api('/api/tareas'); } catch { return; }
+    const antes = new Map(tareasServidor.map((t) => [t.id, t.estado]));
+    tareasServidor = todas.filter((t) => vistas.has(t.id));
+    pintarTareas();
+    const acabadas = tareasServidor.filter((t) => (t.estado === 'hecho' || t.estado === 'error') && antes.get(t.id) !== t.estado);
+    for (const t of acabadas) aviso(t.estado === 'hecho' ? `${t.tipo === 'copiar' ? 'Copia' : 'Movimiento'} terminado` : `Error: ${t.error}`, t.estado === 'error');
+    if (acabadas.length) recargar();
+    if (!tareasServidor.some((t) => t.estado === 'en marcha' || t.estado === 'esperando')) { clearInterval(sondeo); sondeo = null; }
+  }, 800);
+}
+
+// ---------------------------------------------------------------------------
+// Arrastrar: archivos del ordenador → subir; filas → mover a una carpeta
+// ---------------------------------------------------------------------------
+let arrastrando = null;
+contenido.addEventListener('dragstart', (e) => {
+  const fila = e.target.closest('.fila-arch[data-k]'); if (!fila) return;
+  const ent = visibles()[Number(fila.dataset.k)], r = rutaDe(ent);
+  arrastrando = estado.sel.has(r) ? [...estado.sel] : [r];
+  e.dataTransfer.effectAllowed = 'copyMove';
+  e.dataTransfer.setData('text/x-arca', JSON.stringify(arrastrando));
+});
+contenido.addEventListener('dragend', () => { arrastrando = null; $$('.soltar, .soltar-aqui', contenido).forEach((x) => x.classList.remove('soltar', 'soltar-aqui')); });
+contenido.addEventListener('dragover', (e) => {
+  const desdeFuera = e.dataTransfer.types.includes('Files');
+  const objetivo = e.target.closest('[data-soltar]');
+  $$('.soltar, .soltar-aqui', contenido).forEach((x) => x.classList.remove('soltar', 'soltar-aqui'));
+  if (arrastrando && objetivo && !arrastrando.includes(objetivo.dataset.soltar)) { e.preventDefault(); objetivo.classList.add('soltar'); e.dataTransfer.dropEffect = e.ctrlKey || e.altKey ? 'copy' : 'move'; return; }
+  if (desdeFuera && e.target.closest('.explorador') && !estado.protegida) { e.preventDefault(); $('.lista', contenido)?.classList.add('soltar-aqui'); e.dataTransfer.dropEffect = 'copy'; }
+});
+contenido.addEventListener('drop', async (e) => {
+  const objetivo = e.target.closest('[data-soltar]');
+  $$('.soltar, .soltar-aqui', contenido).forEach((x) => x.classList.remove('soltar', 'soltar-aqui'));
+  if (arrastrando && objetivo) {
+    e.preventDefault();
+    const destino = objetivo.dataset.soltar, rutas = arrastrando; arrastrando = null;
+    if (!destino.includes('/') && !estado.discos.find((d) => d.nombre === destino)) return;
+    return lanzarTarea(e.ctrlKey || e.altKey ? 'copiar' : 'mover', rutas, destino);
+  }
+  if (!e.dataTransfer.types.includes('Files') || !e.target.closest('.explorador')) return;
+  e.preventDefault();
+  const items = await leerSoltados(e.dataTransfer);
+  subirArchivos(items, estado.ruta);
+});
+// Archivos y carpetas soltados (con sus subcarpetas)
+async function leerSoltados(dt) {
+  const entradas = [...dt.items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+  if (!entradas.length) return [...dt.files].map((f) => ({ archivo: f, sub: '' }));
+  const out = [];
+  const leer = async (en, sub) => {
+    if (en.isFile) { out.push({ archivo: await new Promise((ok, mal) => en.file(ok, mal)), sub }); return; }
+    const lector = en.createReader();
+    for (;;) {
+      const lote = await new Promise((ok, mal) => lector.readEntries(ok, mal));
+      if (!lote.length) break;
+      for (const h of lote) await leer(h, sub ? `${sub}/${en.name}` : en.name);
+    }
+  };
+  for (const en of entradas) await leer(en, '');
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Buscar (en la carpeta actual y sus subcarpetas)
+// ---------------------------------------------------------------------------
+let tBuscar = null;
+$('#buscar').addEventListener('input', (e) => {
+  clearTimeout(tBuscar);
+  const q = e.target.value.trim();
+  tBuscar = setTimeout(async () => {
+    if (!$('.explorador', contenido)) return;
+    estado.sel.clear();
+    if (!q) { estado.resultados = null; return pintarLista(); }
+    try { estado.resultados = await api(`/api/buscar?ruta=${encodeURIComponent(estado.ruta)}&q=${encodeURIComponent(q)}`); }
+    catch (err) { aviso(err.message, true); return; }
+    pintarLista();
+  }, 350);
+});
+$('#buscar').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.target.value = ''; e.target.dispatchEvent(new Event('input')); } });
+
+// ---------------------------------------------------------------------------
+// Vista previa
+// ---------------------------------------------------------------------------
+function abrirPrevia(ents, k) {
+  const conPrevia = ents.map((e, i) => [e, i]).filter(([e]) => !e.dir);
+  let pos = conPrevia.findIndex(([, i]) => i === k);
+  const capa = document.createElement('div');
+  capa.className = 'previa';
+  document.body.appendChild(capa);
+  const cerrar = () => { capa.remove(); removeEventListener('keydown', tecla); };
+  const tecla = (e) => {
+    if (e.key === 'Escape') cerrar();
+    if (e.key === 'ArrowRight') mover(1);
+    if (e.key === 'ArrowLeft') mover(-1);
+  };
+  addEventListener('keydown', tecla);
+  const mover = (p) => { const n = pos + p; if (n >= 0 && n < conPrevia.length) { pos = n; pintar(); } };
+  async function pintar() {
+    const [e] = conPrevia[pos], r = rutaDe(e), c = claseDe(e);
+    capa.innerHTML = `<header><b title="${esc(e.nombre)}">${esc(e.nombre)}</b><small>${tamano(e.tam)}</small>
+      <a class="btn pequeno" href="${esc(url(r, '&descargar=1'))}" download>${I.descargar}Descargar</a>
+      <button type="button" class="btn-icono" data-p="cerrar" aria-label="Cerrar">${I.cerrar}</button></header>
+      <div class="escena"></div>`;
+    const escena = $('.escena', capa);
+    if (!previsualizable(e)) escena.innerHTML = `<div class="sin-previa">${I[c] || I.archivo}<p>No se puede ver aquí. Descárgalo para abrirlo.</p></div>`;
+    else if (c === 'imagen') escena.innerHTML = `<img alt="${esc(e.nombre)}" src="${esc(url(r))}">`;
+    else if (c === 'video') escena.innerHTML = `<video controls autoplay playsinline src="${esc(url(r))}"></video>`;
+    else if (c === 'audio') escena.innerHTML = `<audio controls autoplay src="${esc(url(r))}"></audio>`;
+    else if (c === 'pdf') escena.innerHTML = `<iframe title="${esc(e.nombre)}" src="${esc(url(r))}"></iframe>`;
+    else if (c === 'texto') {
+      escena.innerHTML = '<pre>Cargando…</pre>';
+      try { const res = await fetch(url(r), { headers: { Range: 'bytes=0-262143' } }); const t = await res.text(); $('pre', escena).textContent = t + (e.tam > 262144 ? '\n\n… (solo se enseña el principio)' : ''); }
+      catch { $('pre', escena).textContent = 'No se pudo leer'; }
+    }
+    if (pos > 0) escena.insertAdjacentHTML('beforeend', `<button type="button" class="paso ant" data-p="-1" aria-label="Anterior">${I.izquierda}</button>`);
+    if (pos < conPrevia.length - 1) escena.insertAdjacentHTML('beforeend', `<button type="button" class="paso sig" data-p="1" aria-label="Siguiente">${I.derecha}</button>`);
+  }
+  capa.addEventListener('click', (e) => {
+    const p = e.target.closest('[data-p]')?.dataset.p;
+    if (p === 'cerrar') cerrar(); else if (p) mover(Number(p));
+    else if (e.target.classList.contains('escena')) cerrar();
+  });
+  pintar();
+}
+
+// ---------------------------------------------------------------------------
+// Papelera
+// ---------------------------------------------------------------------------
+async function verPapelera(disco) {
+  const ex = marco();
+  $('#miga').hidden = false; $('#miga').textContent = `Papelera de ${disco}`;
+  document.title = `Papelera de ${disco} · Arca`;
+  let items;
+  try { items = await api(`/api/papelera?disco=${encodeURIComponent(disco)}`); } catch (e) { ex.innerHTML = `<div class="vacio">${esc(e.message)}</div>`; return; }
+  const sel = new Set();
+  const pintar = () => {
+    ex.innerHTML = `<div class="papelera-cab"><h2>Papelera de ${esc(disco)}</h2>
+      <button type="button" class="btn" data-p="restaurar" ${sel.size ? '' : 'disabled'}>${I.restaurar}Recuperar${sel.size ? ` (${sel.size})` : ''}</button>
+      <button type="button" class="btn peligro" data-p="eliminar" ${sel.size ? '' : 'disabled'}>${I.borrar}Eliminar para siempre</button>
+      <button type="button" class="btn peligro" data-p="vaciar" ${items.length ? '' : 'disabled'}>Vaciar</button></div>
+      <p class="ayuda">Lo borrado se guarda ${estado.diasPapelera} días y luego se elimina solo.</p>
+      <div class="lista">${items.length ? items.map((it) => `<div class="fila-arch papel ${sel.has(it.id) ? 'sel' : ''}" data-id="${esc(it.id)}">
+        <span class="marcar"><input type="checkbox" ${sel.has(it.id) ? 'checked' : ''} aria-label="Elegir ${esc(it.nombre)}"></span>
+        <span class="ico ${it.dir ? 'carpeta' : ''}">${it.dir ? I.carpeta : I[claseDe(it)] || I.archivo}</span>
+        <span class="nombre"><b>${esc(it.nombre)}</b><small>Estaba en ${esc(it.ruta.split('/').slice(0, -1).join(' / '))} · borrado el ${fecha(it.fecha)} · se elimina el ${new Date(it.caduca).toLocaleDateString('es-ES')}</small></span>
+        <span class="tam">${tamano(it.tam)}</span><span></span></div>`).join('') : '<div class="vacio">La papelera está vacía</div>'}</div>`;
+  };
+  pintar();
+  ex.onclick = async (e) => {
+    const fila = e.target.closest('.fila-arch[data-id]');
+    if (fila) { const id = fila.dataset.id; sel.has(id) ? sel.delete(id) : sel.add(id); return pintar(); }
+    const p = e.target.closest('[data-p]')?.dataset.p; if (!p) return;
+    try {
+      if (p === 'restaurar') { const r = await api('/api/restaurar', { metodo: 'POST', datos: { disco, ids: [...sel] } }); aviso(`${r.restaurados.length} recuperado(s) a su sitio`); }
+      if (p === 'eliminar' || p === 'vaciar') {
+        const n = p === 'vaciar' ? items.length : sel.size;
+        const ok = await dialogo({ titulo: p === 'vaciar' ? '¿Vaciar la papelera?' : `¿Eliminar ${n} elemento(s) para siempre?`, texto: 'Esto no se puede deshacer.', botones: [['Cancelar', null], ['Eliminar', true, 'acento']] });
+        if (!ok) return;
+        await api('/api/vaciar', { metodo: 'POST', datos: { disco, ids: p === 'vaciar' ? null : [...sel] } });
+        aviso('Eliminado');
+      }
+      ex.onclick = null; await cargarDiscos(); verPapelera(disco);
+    } catch (err) { aviso(err.message, true); }
+  };
+}
+// Al salir de la papelera, el explorador vuelve a usar sus propios clics
+addEventListener('hashchange', () => { const ex = $('.explorador', contenido); if (ex && !location.hash.startsWith('#papelera')) ex.onclick = null; });
+
+// ---------------------------------------------------------------------------
+// Teclado
+// ---------------------------------------------------------------------------
+addEventListener('keydown', (e) => {
+  if (!$('.explorador', contenido) || e.target.closest('input, textarea, select') || $('.velo, .previa')) return;
+  if (e.key === 'Delete' && estado.sel.size) accionSeleccion('borrar');
+  if (e.key === 'F2' && estado.sel.size === 1) { e.preventDefault(); accionSeleccion('renombrar'); }
+  if (e.key === 'Escape' && estado.sel.size) { estado.sel.clear(); pintarLista(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'a' && $('.lista', contenido)) { e.preventDefault(); estado.sel = new Set(visibles().map(rutaDe)); pintarLista(); }
+});
+
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+arrancar().catch(() => pantallaAcceso());

@@ -1,0 +1,23 @@
+# Para probar Arca en un ordenador con Docker. En el servidor de casa se monta
+# desde HomeLabDockers (carpeta arca/), con los discos de verdad.
+services:
+  arca:
+    build: .
+    image: arca:latest
+    container_name: arca
+    restart: unless-stopped
+    init: true
+    read_only: true
+    ports:
+      - "9995:9995"
+    environment:
+      TZ: Europe/Madrid
+      ARCA_DISCOS: "prueba=/discos/prueba"
+      ARCA_USUARIO: josemi
+      ARCA_CLAVE: cambiame
+    volumes:
+      - ./prueba-discos:/discos/prueba
+      - arca-datos:/datos
+    mem_limit: 128m
+volumes:
+  arca-datos:
