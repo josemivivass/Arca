@@ -358,9 +358,7 @@ async function reproductor({ e, r, escena, aviso, alCerrar }, tipo) {
   const bucle = () => { pintarSub(); if (!s.arrastrando) pintarTiempo(); raf = requestAnimationFrame(bucle); };
   el.addEventListener('play', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(bucle); });
   el.addEventListener('pause', () => cancelAnimationFrame(raf));
-  // Forzados en español: se ponen solos
-  const forzado = opcionesSub.find((o) => o.forzado && esEspanol(o.idioma) && o.texto);
-  if (forzado) ponerSub(forzado);
+  // Los subtítulos empiezan siempre apagados: se ponen desde el botón (o con la tecla C)
 
   // Menús: subtítulos / audio, calidad y modo
   function abrirMenu(cual) {
