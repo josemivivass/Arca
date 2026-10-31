@@ -571,3 +571,13 @@ html.con-teclado .velo { align-items: flex-start; padding-top: 8px; }
   .herr-barra .btn { padding: 6px 9px; }
   .herr-barra select { min-width: 0; flex: 0 1 auto; }
 }
+/* Móvil: dos discos a lo ancho (si hay más, se desliza de lado). Las
+   papeleras están en el menú de las tres rayas. */
+@media (max-width: 900px) {
+  .lateral { gap: 8px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .lateral::-webkit-scrollbar { display: none; }
+  .lateral .enlace-lateral { display: none; }
+  .lateral .disco { flex: 0 0 calc((100% - 8px) / 2); min-width: 0; scroll-snap-align: start; }
+  .lateral .disco b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lateral .disco small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
