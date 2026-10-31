@@ -38,6 +38,8 @@ const I = {
   cerrar: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
   candado: svg('<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'),
   lista: svg('<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>'),
+  ojo: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>'),
+  ojoCerrado: svg('<path d="M3 3l18 18M10.6 5.6A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.8M6.3 6.4C3.9 8.1 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.6-1.3M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'),
   cuadricula: svg('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'),
   izquierda: svg('<path d="m15 18-6-6 6-6"/>'),
   derecha: svg('<path d="m9 18 6-6-6-6"/>'),
@@ -142,7 +144,7 @@ async function pedirTexto(titulo, valor = '', texto = '') {
 // ---------------------------------------------------------------------------
 const estado = {
   discos: [], ruta: '', entradas: [], protegida: false, sel: new Set(), ultimo: null,
-  orden: leerPref('orden', 'nombre'), asc: leerPref('asc', '1') === '1', vista: leerPref('vista', 'lista'),
+  orden: leerPref('orden', 'nombre'), asc: leerPref('asc', '1') === '1', vista: leerPref('vista', 'lista'), verOcultos: leerPref('ocultos', '0') === '1', ocultas: 0,
   busqueda: '', resultados: null,
 };
 function leerPref(k, d) { try { return localStorage.getItem('arca.' + k) ?? d; } catch { return d; } }
@@ -277,14 +279,14 @@ async function abrirCarpeta(ruta) {
   const ex = marco();
   cancelarMiniaturas(ex);
   try {
-    const r = await api(`/api/lista?ruta=${encodeURIComponent(ruta)}`);
-    estado.ruta = r.ruta; estado.entradas = r.entradas; estado.protegida = r.protegida;
+    const r = await api(`/api/lista?ruta=${encodeURIComponent(ruta)}${estado.verOcultos ? '&ocultos=1' : ''}`);
+    estado.ruta = r.ruta; estado.entradas = r.entradas; estado.protegida = r.protegida; estado.ocultas = r.ocultas || 0;
   } catch (e) {
     ex.innerHTML = `<div class="vacio">${esc(e.message)}<small><a href="#">Volver al inicio</a></small></div>`;
     return;
   }
   const miga = $('#miga'); miga.hidden = false; miga.textContent = estado.ruta.split('/').at(-1);
-  document.title = `${estado.ruta.split('/').at(-1)} · Arca`;
+  document.title = 'Arca';
   pintarExplorador();
 }
 
@@ -312,6 +314,7 @@ function pintarExplorador() {
         ${[['nombre', 'Nombre'], ['mod', 'Fecha'], ['tam', 'Tamaño']].map(([v, t]) => `<option value="${v}" ${estado.orden === v ? 'selected' : ''}>${t}</option>`).join('')}
       </select>
       <button type="button" class="btn-icono" data-a="sentido" title="${estado.asc ? 'Ascendente' : 'Descendente'}" aria-label="Cambiar el sentido">${estado.asc ? I.arriba : `<span style="display:inline-flex;transform:rotate(180deg)">${I.arriba}</span>`}</button>
+      ${estado.ocultas || estado.verOcultos ? `<button type="button" class="btn-icono ${estado.verOcultos ? 'activo' : ''}" data-a="ver-ocultos" title="${estado.verOcultos ? 'No enseñar lo oculto' : `Ver lo oculto (${estado.ocultas})`}" aria-label="${estado.verOcultos ? 'No enseñar lo oculto' : 'Ver lo oculto'}" aria-pressed="${estado.verOcultos}">${estado.verOcultos ? I.ojo : I.ojoCerrado}</button>` : ''}
       <button type="button" class="btn-icono" data-a="vista" title="${estado.vista === 'lista' ? 'Ver en cuadrícula' : 'Ver en lista'}" aria-label="Cambiar la vista">${estado.vista === 'lista' ? I.cuadricula : I.lista}</button>
       <input type="file" multiple hidden data-entrada="archivos"><input type="file" multiple hidden webkitdirectory data-entrada="carpeta">
     </div>
@@ -388,10 +391,10 @@ function pintarLista() {
   } else {
     lista.innerHTML = cab + ents.map((e, k) => {
       const r = rutaDe(e);
-      return `<div class="fila-arch ${estado.sel.has(r) ? 'sel' : ''}" data-k="${k}" draggable="true" ${e.dir ? `data-soltar="${esc(r)}"` : ''}>
+      return `<div class="fila-arch ${estado.sel.has(r) ? 'sel' : ''} ${e.oculta ? 'oculta' : ''}" data-k="${k}" draggable="true" ${e.dir ? `data-soltar="${esc(r)}"` : ''}>
         <span class="marcar"><input type="checkbox" ${estado.sel.has(r) ? 'checked' : ''} aria-label="Elegir ${esc(e.nombre)}"></span>
         <span class="ico ${claseDe(e)}">${iconoFila(e)}</span>
-        <span class="nombre"><b title="${esc(e.nombre)}">${esc(e.nombre)}${e.protegida ? `<span class="solo-lectura" title="Solo lectura">${I.candado}</span>` : ''}</b>
+        <span class="nombre"><b title="${esc(e.nombre)}">${esc(e.nombre)}${e.protegida ? `<span class="solo-lectura" title="Solo lectura">${I.candado}</span>` : ''}${e.oculta ? `<span class="solo-lectura" title="Oculto">${I.ojoCerrado}</span>` : ''}</b>
           ${estado.resultados ? `<small>${esc(r.split('/').slice(0, -1).join(' / '))}</small>` : `<small class="solo-movil">${e.dir ? '' : tamano(e.tam) + ' · '}${fecha(e.mod)}</small>`}</span>
         <span class="tam">${e.dir ? '' : tamano(e.tam)}</span><span class="fecha">${fecha(e.mod)}</span>
         <small class="meta-cuadricula">${e.dir ? '' : `${tamano(e.tam)} · `}${fechaCorta(e.mod)}</small></div>`;
@@ -417,6 +420,7 @@ function pintarSeleccion() {
     <button type="button" class="btn" data-s="copiar">${I.copiar}<span class="txt">Copiar a…</span></button>
     <button type="button" class="btn" data-s="mover" ${bloqueada ? 'disabled' : ''}>${I.mover}<span class="txt">Mover a…</span></button>
     ${n === 1 ? `<button type="button" class="btn" data-s="renombrar" ${bloqueada ? 'disabled' : ''}>${I.renombrar}<span class="txt">Renombrar</span></button>` : ''}
+    ${sel.every((e) => e.oculta) ? `<button type="button" class="btn" data-s="mostrar">${I.ojo}<span class="txt">Dejar de ocultar</span></button>` : `<button type="button" class="btn" data-s="ocultar">${I.ojoCerrado}<span class="txt">Ocultar</span></button>`}
     <button type="button" class="btn peligro" data-s="borrar" ${bloqueada ? 'disabled' : ''}>${I.borrar}<span class="txt">Borrar</span></button>
     <button type="button" class="btn-icono" data-s="nada" title="Quitar la selección" aria-label="Quitar la selección" style="color:inherit">${I.quitar}</button>`;
 }
@@ -435,6 +439,7 @@ contenido.addEventListener('click', async (e) => {
     return;
   }
   if (a === 'sentido') { estado.asc = !estado.asc; guardarPref('asc', estado.asc ? '1' : '0'); return pintarExplorador(); }
+  if (a === 'ver-ocultos') { estado.verOcultos = !estado.verOcultos; guardarPref('ocultos', estado.verOcultos ? '1' : '0'); return abrirCarpeta(estado.ruta); }
   if (a === 'vista') { estado.vista = estado.vista === 'lista' ? 'cuadricula' : 'lista'; guardarPref('vista', estado.vista); return pintarExplorador(); }
   if (a === 'todo') {
     const ents = visibles();
@@ -484,6 +489,15 @@ async function accionSeleccion(s) {
     if (!n || n === sel[0].nombre) return;
     try { await api('/api/renombrar', { metodo: 'POST', datos: { ruta: rutas[0], nombre: n } }); estado.sel.clear(); await recargar(); }
     catch (err) { aviso(err.message, true); }
+  }
+  if (s === 'ocultar' || s === 'mostrar') {
+    try {
+      await api('/api/ocultar', { metodo: 'POST', datos: { rutas, ocultar: s === 'ocultar' } });
+      const n = rutas.length;
+      aviso(s === 'ocultar' ? `${n === 1 ? 'Oculto' : `${n} elementos ocultos`}${estado.verOcultos ? '' : '. Para verlo, pulsa el ojo de la barra'}` : (n === 1 ? 'Ya no está oculto' : `${n} elementos ya no están ocultos`));
+      estado.sel.clear(); await recargar();
+    } catch (err) { aviso(err.message, true); }
+    return;
   }
   if (s === 'borrar') {
     const n = sel.length;
@@ -698,7 +712,7 @@ $('#buscar').addEventListener('input', (e) => {
     if (!$('.explorador', contenido)) return;
     estado.sel.clear();
     if (!q) { estado.resultados = null; return pintarLista(); }
-    try { estado.resultados = await api(`/api/buscar?ruta=${encodeURIComponent(estado.ruta)}&q=${encodeURIComponent(q)}`); }
+    try { estado.resultados = await api(`/api/buscar?ruta=${encodeURIComponent(estado.ruta)}&q=${encodeURIComponent(q)}${estado.verOcultos ? '&ocultos=1' : ''}`); }
     catch (err) { aviso(err.message, true); return; }
     pintarLista();
   }, 350);
@@ -716,7 +730,7 @@ function abrirPrevia(ents, k) { abrirVisor(ents, k, { rutaDe, icono: (e) => I[cl
 async function verPapelera(disco) {
   const ex = marco();
   $('#miga').hidden = false; $('#miga').textContent = `Papelera de ${disco}`;
-  document.title = `Papelera de ${disco} · Arca`;
+  document.title = 'Arca';
   let items;
   try { items = await api(`/api/papelera?disco=${encodeURIComponent(disco)}`); } catch (e) { ex.innerHTML = `<div class="vacio">${esc(e.message)}</div>`; return; }
   const sel = new Set();

@@ -563,3 +563,11 @@ html.con-teclado .velo { align-items: flex-start; padding-top: 8px; }
   .dialogo > .cuerpo { padding: 6px 14px 10px; } .dialogo > footer { padding: 10px 14px; }
   .dialogo > footer .btn { flex: 1 1 0; }
 }
+/* Ocultos (cuando se pide verlos): más apagados */
+.fila-arch.oculta .ico, .fila-arch.oculta .nombre b { opacity: .5; }
+.btn-icono.activo { color: var(--acento); background: var(--acento-suave); }
+@media (max-width: 760px) {
+  .herr-barra { flex-wrap: nowrap; gap: 4px; }
+  .herr-barra .btn { padding: 6px 9px; }
+  .herr-barra select { min-width: 0; flex: 0 1 auto; }
+}

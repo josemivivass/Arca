@@ -174,20 +174,44 @@ async function libre(dir, nombre) {
 // ---------------------------------------------------------------------------
 // Listar, buscar, espacio
 // ---------------------------------------------------------------------------
-async function listar(rel) {
+// ---------------------------------------------------------------------------
+// Ocultos: una lista propia de Arca. No toca los archivos ni su nombre (en
+// Windows, Immich o Jellyfin se siguen viendo igual); solo deja de enseñarlos
+// aquí hasta que se pide «Ver ocultos».
+// ---------------------------------------------------------------------------
+const ARCHIVO_OCULTOS = path.join(DATOS, 'ocultos.json');
+let ocultos = new Set();
+function cargarOcultos() { try { ocultos = new Set(JSON.parse(fs.readFileSync(ARCHIVO_OCULTOS, 'utf8')).map(normal)); } catch {} }
+let tOcultos = null;
+const guardarOcultos = () => { estaOculta.version = (estaOculta.version || 0) + 1; clearTimeout(tOcultos); tOcultos = setTimeout(() => fs.writeFile(ARCHIVO_OCULTOS, JSON.stringify([...ocultos].sort()), () => {}), 200); };
+const estaOculta = (rel) => ocultos.has(normal(rel));
+// Al renombrar o mover algo oculto (o algo con cosas ocultas dentro), sigue oculto
+function moverOcultos(antes, despues) {
+  let cambio = false;
+  for (const o of [...ocultos]) {
+    if (o === antes || o.startsWith(antes + '/')) { ocultos.delete(o); ocultos.add(despues + o.slice(antes.length)); cambio = true; }
+  }
+  if (cambio) guardarOcultos();
+}
+
+async function listar(rel, verOcultos = false) {
   const { abs, rel: r } = await resolver(rel);
   const ents = await fsp.readdir(abs, { withFileTypes: true });
   const salida = [];
+  let nOcultas = 0;
   await Promise.all(ents.filter((e) => !oculto(e.name)).map(async (e) => {
     try {
       const st = await fsp.stat(path.join(abs, e.name));
-      salida.push({ nombre: normal(e.name), dir: st.isDirectory(), tam: st.isDirectory() ? null : st.size, mod: st.mtimeMs, protegida: protegida(`${r}/${e.name}`, { contenido: false }) });
+      const n = normal(e.name), oculta = estaOculta(`${r}/${n}`);
+      if (oculta) nOcultas++;
+      if (oculta && !verOcultos) return;
+      salida.push({ nombre: n, dir: st.isDirectory(), tam: st.isDirectory() ? null : st.size, mod: st.mtimeMs, protegida: protegida(`${r}/${e.name}`, { contenido: false }), oculta });
     } catch {}
   }));
-  return { ruta: r, protegida: protegida(r, { contenido: false }), entradas: salida };
+  return { ruta: r, protegida: protegida(r, { contenido: false }), entradas: salida, ocultas: nOcultas };
 }
 
-async function buscar(rel, q, max = 300) {
+async function buscar(rel, q, verOcultos = false, max = 300) {
   const { abs, rel: r } = await resolver(rel);
   const palabras = normal(q).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/).filter(Boolean);
   if (!palabras.length) return [];
@@ -200,10 +224,12 @@ async function buscar(rel, q, max = 300) {
     for (const e of ents) {
       if (oculto(e.name)) continue;
       const n = normal(e.name), er = `${dr}/${n}`;
+      const esOculta = estaOculta(er);
+      if (esOculta && !verOcultos) continue;
       const plano = n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       if (palabras.every((w) => plano.includes(w))) {
         let st; try { st = await fsp.stat(path.join(d, e.name)); } catch { continue; }
-        res.push({ nombre: n, ruta: er, dir: st.isDirectory(), tam: st.isDirectory() ? null : st.size, mod: st.mtimeMs, protegida: protegida(er, { contenido: false }) });
+        res.push({ nombre: n, ruta: er, dir: st.isDirectory(), tam: st.isDirectory() ? null : st.size, mod: st.mtimeMs, protegida: protegida(er, { contenido: false }), oculta: esOculta });
         if (res.length >= max) break;
       }
       if (e.isDirectory()) cola.push([path.join(d, e.name), er]);
@@ -401,12 +427,13 @@ async function moverCopiar(rutas, destinoRel, copiar) {
       const dst = path.join(destino.abs, nombre);
       if (!copiar && o.disco === destino.disco) {
         await fsp.rename(o.abs, dst); // mismo disco: instantáneo
+        moverOcultos(o.rel, `${destino.rel}/${normal(nombre)}`);
         t.hechos += (await tamanoTotal(dst)).bytes;
         continue;
       }
       try { await copiarRec(o.abs, dst, t); }
       catch (e) { await fsp.rm(dst, { recursive: true, force: true }).catch(() => {}); throw e; }
-      if (!copiar) await fsp.rm(o.abs, { recursive: true, force: true });
+      if (!copiar) { await fsp.rm(o.abs, { recursive: true, force: true }); moverOcultos(o.rel, `${destino.rel}/${normal(nombre)}`); }
     }
   }, desc);
 }
@@ -584,8 +611,21 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true });
   }
   if (ruta === '/api/espacio') return json(res, 200, await espacio());
-  if (ruta === '/api/lista') return json(res, 200, await listar(url.searchParams.get('ruta')));
-  if (ruta === '/api/buscar') return json(res, 200, await buscar(url.searchParams.get('ruta'), url.searchParams.get('q') || ''));
+  if (ruta === '/api/lista') return json(res, 200, await listar(url.searchParams.get('ruta'), url.searchParams.get('ocultos') === '1'));
+  if (ruta === '/api/buscar') return json(res, 200, await buscar(url.searchParams.get('ruta'), url.searchParams.get('q') || '', url.searchParams.get('ocultos') === '1'));
+  if (ruta === '/api/ocultar' && m === 'POST') {
+    const { rutas, ocultar } = await leerJson(req);
+    if (!Array.isArray(rutas) || !rutas.length) fallo(400, 'No hay nada elegido');
+    const hechos = [];
+    for (const r of rutas) {
+      const o = await resolver(r);
+      if (o.rel.split('/').length < 2) fallo(400, 'No se puede ocultar un disco entero');
+      if (ocultar) ocultos.add(normal(o.rel)); else ocultos.delete(normal(o.rel));
+      hechos.push(o.rel);
+    }
+    guardarOcultos();
+    return json(res, 200, { hechos });
+  }
   if (ruta === '/api/archivo') { const o = await resolver(url.searchParams.get('ruta')); return enviarArchivo(req, res, o.abs, path.basename(o.abs), url.searchParams.get('descargar') === '1'); }
   if (ruta === '/api/miniatura') {
     const o = await resolver(url.searchParams.get('ruta'));
@@ -652,7 +692,7 @@ async function api(req, res, url) {
   }
   if (ruta === '/api/muestra') {
     const o = await resolver(url.searchParams.get('ruta'));
-    return json(res, 200, await medios.muestraCarpeta(o.abs, o.rel, oculto), { 'Cache-Control': 'private, max-age=60' });
+    return json(res, 200, await medios.muestraCarpeta(o.abs, o.rel, oculto, estaOculta), { 'Cache-Control': 'no-cache' });
   }
   if (ruta === '/api/zip') {
     const rutas = JSON.parse(url.searchParams.get('rutas') || '[]');
@@ -680,6 +720,7 @@ async function api(req, res, url) {
       let existe = false; try { await fsp.lstat(dst); existe = true; } catch {}
       if (existe && dst.toLowerCase() !== o.abs.toLowerCase()) fallo(409, 'Ya hay algo con ese nombre');
       await fsp.rename(o.abs, dst);
+      moverOcultos(o.rel, [...o.rel.split('/').slice(0, -1), n].join('/'));
     }
     return json(res, 200, { ruta: [...o.rel.split('/').slice(0, -1), n].join('/') });
   }
@@ -699,6 +740,7 @@ async function api(req, res, url) {
 
 // ---------------------------------------------------------------------------
 cargarAcceso();
+cargarOcultos();
 const medios = crearMedios({ DATOS, fallo });
 const servidor = http.createServer(async (req, res) => {
   let url;

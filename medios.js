@@ -509,16 +509,16 @@ module.exports = function crearMedios({ DATOS, fallo }) {
   // -------------------------------------------------------------------------
   const muestras = new Map();
   const conImagen = (n) => ['imagen', 'imagenRara', 'video', 'pdf', 'audio'].includes(claseDe(n));
-  async function muestraCarpeta(abs, rel, oculto) {
+  async function muestraCarpeta(abs, rel, oculto, estaOculta = () => false) {
     const st = await fsp.stat(abs);
-    const clave = `${abs}\0${st.mtimeMs}`;
+    const clave = `${abs}\0${st.mtimeMs}\0${estaOculta.version || 0}`;
     if (muestras.has(clave)) return muestras.get(clave);
     const res = []; let directos = 0;
     const cola2 = [[abs, rel, 0]]; let vistas = 0;
     while (cola2.length && res.length < 4 && vistas < 12) {
       const [d, r, nivel] = cola2.shift(); vistas++;
       let ents; try { ents = await fsp.readdir(d, { withFileTypes: true }); } catch { continue; }
-      ents = ents.filter((e) => !oculto(e.name)).sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+      ents = ents.filter((e) => !oculto(e.name) && !estaOculta(`${r}/${e.name.normalize('NFC')}`)).sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
       if (nivel === 0) directos = ents.length;
       const prio = (n) => ({ imagen: 0, imagenRara: 1, video: 2, pdf: 3, audio: 4 }[claseDe(n)] ?? 9);
       const cand = ents.filter((e) => e.isFile() && conImagen(e.name)).sort((a, b) => prio(a.name) - prio(b.name));
