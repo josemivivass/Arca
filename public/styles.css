@@ -587,3 +587,15 @@ html.con-teclado .velo { align-items: flex-start; padding-top: 8px; }
    los menús la mantienen */
 html { scrollbar-width: none; }
 html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ---------- barras de desplazamiento ----------
+   Del color de la app, sobre el fondo de la página y sin flechas.
+   Chrome, Edge y Safari usan ::-webkit-scrollbar; Firefox, scrollbar-color. */
+:root { --fondo-barra: var(--fondo); }
+::-webkit-scrollbar { width: 10px; height: 10px; background: var(--fondo-barra); }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--fondo-barra); }
+::-webkit-scrollbar-thumb { background: var(--acento); border-radius: 999px; border: 2px solid var(--fondo-barra); }
+::-webkit-scrollbar-thumb:hover { background: var(--acento-fuerte, var(--acento)); }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-color: var(--acento) var(--fondo-barra); } }
+.previa { --fondo-barra: #0f0e0d; }
