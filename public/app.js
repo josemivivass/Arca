@@ -275,6 +275,7 @@ function pintarLateral() {
 
 async function abrirCarpeta(ruta) {
   const ex = marco();
+  cancelarMiniaturas(ex);
   try {
     const r = await api(`/api/lista?ruta=${encodeURIComponent(ruta)}`);
     estado.ruta = r.ruta; estado.entradas = r.entradas; estado.protegida = r.protegida;
@@ -296,6 +297,7 @@ const visibles = () => (estado.resultados ? estado.resultados : ordenadas(estado
 
 function pintarExplorador() {
   const ex = $('.explorador', contenido); if (!ex) return;
+  cancelarMiniaturas(ex);
   const partes = estado.ruta.split('/');
   const soloLectura = estado.protegida;
   ex.innerHTML = `
@@ -323,7 +325,7 @@ function iconoFila(e) {
   const cuadricula = estado.vista === 'cuadricula';
   if (e.dir) return cuadricula ? `${icono}<span class="mosaico" data-muestra="${esc(r)}"></span>` : icono;
   const fuente = ext(e.nombre) === 'svg' && e.tam < 2 << 20 ? '/api/vista' : '/api/miniatura'; // los SVG pequeños, tal cual
-  const img = conMiniatura(e) ? `<img loading="lazy" decoding="async" alt="" src="${fuente}?ruta=${encodeURIComponent(r)}&v=${version(e)}">` : '';
+  const img = conMiniatura(e) ? `<img loading="lazy" decoding="async" alt="" src="${fuente}?ruta=${encodeURIComponent(r)}&v=${version(e)}${cuadricula ? '' : '&t=p'}">` : '';
   const extracto = cuadricula && conExtracto(e) ? `<span class="extracto" data-extracto="${esc(r)}" data-v="${version(e)}"></span>` : '';
   const insignia = c === 'video' || c === 'audio' ? `<span class="insignia">${c === 'video' ? I.video : I.audio}</span>` : '';
   return `${icono}${img}${extracto}${insignia}`;
@@ -341,7 +343,7 @@ async function rellenar(el) {
       ico?.insertAdjacentHTML('beforeend', `<small class="cuantos">${m.elementos ? `${m.elementos} elemento${m.elementos === 1 ? '' : 's'}` : 'Vacía'}</small>`);
       if (!m.rutas.length) return;
       el.dataset.n = m.rutas.length;
-      el.innerHTML = m.rutas.map((r) => `<img loading="lazy" decoding="async" alt="" src="/api/miniatura?ruta=${encodeURIComponent(r)}">`).join('');
+      el.innerHTML = m.rutas.map((r) => `<img loading="lazy" decoding="async" alt="" src="/api/miniatura?ruta=${encodeURIComponent(r)}&t=p">`).join('');
       el.querySelectorAll('img').forEach((i) => i.addEventListener('error', () => { i.remove(); el.dataset.n = el.children.length; if (!el.children.length) ico?.classList.remove('con-mosaico'); }));
       ico?.classList.add('con-mosaico');
       return;
@@ -359,6 +361,12 @@ async function rellenar(el) {
     }
   } catch {}
 }
+// Al cambiar de carpeta, las miniaturas que aún no han llegado se cancelan:
+// el navegador deja libre la conexión y el servidor no las genera
+function cancelarMiniaturas(raiz) {
+  raiz.querySelectorAll('img').forEach((i) => { if (!i.complete) { i.removeAttribute('src'); } });
+  raiz.querySelectorAll('[data-muestra], [data-extracto]').forEach((el) => observador?.unobserve(el));
+}
 function prepararMiniaturas(raiz) {
   raiz.querySelectorAll('.ico > img').forEach((img) => {
     const ok = () => { if (img.naturalWidth) img.closest('.ico')?.classList.add('con-imagen'); };
@@ -371,6 +379,7 @@ function prepararMiniaturas(raiz) {
 
 function pintarLista() {
   const lista = $('.lista', contenido); if (!lista) return;
+  cancelarMiniaturas(lista);
   const ents = visibles();
   const cab = estado.resultados ? '' : `<div class="fila-arch cab"><span class="marcar"><input type="checkbox" data-a="todo" aria-label="Elegir todo" ${ents.length && estado.sel.size === ents.length ? 'checked' : ''}></span><span></span>
     <button type="button" data-ordenar="nombre">Nombre</button><button type="button" data-ordenar="tam" style="text-align:right">Tamaño</button><button type="button" data-ordenar="mod" style="text-align:right">Modificado</button></div>`;

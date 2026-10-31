@@ -262,14 +262,18 @@ async function reproductor({ e, r, escena, aviso, alCerrar }, tipo) {
       if (!el.src.includes('/api/archivo')) el.src = archivo(r);
       if (t) { if (el.readyState >= 1) el.currentTime = t; else el.addEventListener('loadedmetadata', () => { el.currentTime = t; }, { once: true }); }
     } else {
+      // Sin recomprimir, el vídeo empieza en el fotograma clave anterior: el
+      // servidor dice cuál es para que el contador y los subtítulos cuadren
+      const pedido = t.toFixed(3);
       let inicio = t;
       const copia = copiaPosible();
-      if (copia && t > 0) { try { inicio = (await (await fetch(`/api/punto?ruta=${enc(r)}&t=${t.toFixed(2)}`)).json()).t; } catch {} }
+      if (copia && t > 0) { try { inicio = (await (await fetch(`/api/punto?ruta=${enc(r)}&t=${pedido}&audio=${s.audio}`)).json()).t; } catch {} }
       if (!caja.isConnected) return;
       s.offset = inicio;
-      const q = new URLSearchParams({ ruta: r, t: inicio.toFixed(3), audio: String(s.audio), alto: String(s.alto) });
+      const q = new URLSearchParams({ ruta: r, t: pedido, audio: String(s.audio), alto: String(s.alto) });
       if (copia) q.set('copia', '1');
       el.src = tipo === 'video' ? `/api/video?${q}` : `/api/audio?${q}`;
+      // (empieza en el fotograma clave de justo antes del punto pedido: como mucho unos segundos antes)
     }
     if (reproducir) el.play().catch(() => pintarPlay());
     pintarTiempo();

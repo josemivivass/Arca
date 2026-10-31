@@ -590,7 +590,11 @@ async function api(req, res, url) {
   if (ruta === '/api/miniatura') {
     const o = await resolver(url.searchParams.get('ruta'));
     const st = await fsp.stat(o.abs); if (st.isDirectory()) fallo(400, 'Es una carpeta');
-    const m = await medios.miniatura(o.abs, st);
+    const senal = { cancelado: false };
+    res.on('close', () => { if (!res.writableFinished) senal.cancelado = true; });
+    let m;
+    try { m = await medios.miniatura(o.abs, st, url.searchParams.get('t') === 'p' ? 'p' : 'm', senal); }
+    catch (e) { if (e.cancelado) return res.destroy(); throw e; }
     if (!m) { res.writeHead(204, { 'Cache-Control': 'private, max-age=3600', ...COMUNES }); return res.end(); }
     return enviarCache(req, res, m);
   }
@@ -623,7 +627,9 @@ async function api(req, res, url) {
   // Fotograma clave en o antes de t: desde ahí empieza la copia sin recomprimir
   if (ruta === '/api/punto') {
     const o = await resolver(url.searchParams.get('ruta'));
-    return json(res, 200, { t: await medios.claveAntes(o.abs, Math.max(0, Number(url.searchParams.get('t')) || 0)) });
+    const st = await fsp.stat(o.abs); const info = await medios.informacion(o.abs, st);
+    const t = Math.max(0, Number(url.searchParams.get('t')) || 0), audio = Math.max(0, Math.min(Number(url.searchParams.get('audio')) || 0, info.audios.length - 1));
+    return json(res, 200, { t: medios.copiable(info) ? await medios.inicioReal(o.abs, t, audio) : t });
   }
   if (ruta === '/api/subtitulos') {
     const o = await resolver(url.searchParams.get('ruta'));

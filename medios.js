@@ -76,23 +76,29 @@ module.exports = function crearMedios({ DATOS, fallo }) {
   }
 
   // Cola: como mucho N trabajos pesados a la vez (y uno solo por clave)
+  // Si quien la pidió ya se fue (cambió de carpeta, cerró…), la miniatura
+  // que aún no ha empezado no se hace: así lo nuevo sale antes
   function cola(n) {
     let activos = 0; const espera = []; const enCurso = new Map();
     const siguiente = () => {
       while (activos < n && espera.length) {
-        const { fn, ok, mal } = espera.shift(); activos++;
-        fn().then(ok, mal).finally(() => { activos--; siguiente(); });
+        const t = espera.shift();
+        if (t.senales.length && t.senales.every((x) => x.cancelado)) { t.mal(Object.assign(new Error('cancelado'), { cancelado: true })); continue; }
+        activos++;
+        t.fn().then(t.ok, t.mal).finally(() => { activos--; siguiente(); });
       }
     };
-    return (clave, fn) => {
-      if (enCurso.has(clave)) return enCurso.get(clave);
-      const pr = new Promise((ok, mal) => { espera.push({ fn, ok, mal }); siguiente(); })
+    return (clave, fn, senal) => {
+      const ya = enCurso.get(clave);
+      if (ya) { if (senal) ya.trabajo.senales.push(senal); else ya.trabajo.senales.length = 0; return ya.pr; }
+      const trabajo = { fn, senales: senal ? [senal] : [] };
+      const pr = new Promise((ok, mal) => { Object.assign(trabajo, { ok, mal }); espera.push(trabajo); siguiente(); })
         .finally(() => enCurso.delete(clave));
-      enCurso.set(clave, pr);
+      enCurso.set(clave, { pr, trabajo });
       return pr;
     };
   }
-  const pesada = cola(Math.max(1, Number(process.env.ARCA_TRABAJOS) || 2));
+  const pesada = cola(Math.max(1, Number(process.env.ARCA_TRABAJOS) || Math.min(4, require('os').cpus().length || 2)));
 
   const claveDe = (abs, st, extra = '') => crypto.createHash('sha1').update(`${abs}\0${st.size}\0${Math.floor(st.mtimeMs)}\0${extra}`).digest('hex');
   const enCache = (tipo, clave, ext) => path.join(CACHE, tipo, clave.slice(0, 2), `${clave}.${ext}`);
@@ -158,11 +164,11 @@ module.exports = function crearMedios({ DATOS, fallo }) {
     throw new Error(errores.join(' · ') || 'No hay con qué abrir esta imagen');
   }
 
-  async function generarMiniatura(abs, st, lado = 480) {
+  async function generarMiniatura(abs, st, lado = 320) {
     const c = claseDe(abs), x = extDe(abs);
     if (c === 'imagen' || c === 'imagenRara') {
       if (!hay.vips && /^jpe?g$/.test(x)) { const m = await miniaturaExif(abs).catch(() => null); if (m && !hay.ffmpeg) return { datos: m, ext: 'jpg' }; }
-      return imagenReducida(abs, lado, 72);
+      return imagenReducida(abs, lado, 62);
     }
     if (c === 'pdf') {
       if (hay.pdftoppm) return { datos: await pdfPrimera(abs, lado), ext: 'jpg' };
@@ -196,14 +202,18 @@ module.exports = function crearMedios({ DATOS, fallo }) {
   }
 
   // Miniatura en caché (o null si ese archivo no tiene)
-  async function miniatura(abs, st) {
+  // Dos tamaños: «p» (lista y mosaicos de carpetas) y «m» (cuadrícula). Las
+  // pequeñas pesan poco y salen enseguida.
+  const LADOS = { p: 160, m: 320 };
+  async function miniatura(abs, st, tam = 'm', senal) {
     await listo;
-    const clave = claveDe(abs, st, 'm2');
+    const lado = LADOS[tam] || LADOS.m;
+    const clave = claveDe(abs, st, `m3-${lado}`);
     const c = await leerCache('miniaturas', clave);
     if (c) return c.ext === 'nada' ? null : c;
     return pesada(clave, async () => {
       let r = null;
-      try { r = await generarMiniatura(abs, st); } catch (e) { console.log(`miniatura de ${abs}: ${e.message}`); }
+      try { r = await generarMiniatura(abs, st, lado); } catch (e) { console.log(`miniatura de ${abs}: ${e.message}`); }
       if (!r || !r.datos?.length) { await guardarCache('miniaturas', clave, 'nada', Buffer.alloc(0)); return null; }
       return guardarCache('miniaturas', clave, r.ext, r.datos);
     });
@@ -302,22 +312,48 @@ module.exports = function crearMedios({ DATOS, fallo }) {
     p.stdout.pipe(res);
   }
 
+  // Al copiar el vídeo sin recomprimir, ffmpeg empieza en un fotograma clave
+  // anterior al punto pedido. Para que imagen y sonido vayan a la par, los dos
+  // empiezan ahí (-noaccurate_seek), y esta función averigua dónde cae
+  // exactamente, para que el reproductor sepa qué minuto está viendo.
+  const inicios = new Map();
+  async function inicioReal(abs, t, audio) {
+    if (t <= 0) return 0;
+    const clave = `${abs}\0${t.toFixed(3)}\0${audio}`;
+    if (inicios.has(clave)) return inicios.get(clave);
+    const tmp = tmpNombre('nut');
+    let r = t;
+    try {
+      await ejecutar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-noaccurate_seek', '-ss', t.toFixed(3), '-t', '0.4', '-i', `file:${abs}`,
+        '-map', '0:v:0', '-map', `0:a:${audio}?`, '-c', 'copy', '-copyts', '-f', 'nut', tmp], { tiempo: 20000 });
+      const s2 = await ejecutar('ffprobe', ['-v', 'error', '-show_entries', 'packet=dts_time,pts_time', '-of', 'csv=p=0', tmp], { tiempo: 10000 });
+      const n = s2.toString().split(/[\n,]/).map((x) => (x.trim() ? Number(x) : NaN)).filter(Number.isFinite);
+      if (n.length) r = Math.max(0, Math.min(...n));
+    } catch {} finally { fsp.rm(tmp, { force: true }).catch(() => {}); }
+    inicios.set(clave, r); if (inicios.size > 200) inicios.delete(inicios.keys().next().value);
+    return r;
+  }
+  const copiable = (info) => info.video && /^(h264|hevc|av1|vp9)$/.test(info.video.codec);
+
   async function video(req, res, sesion, abs, st, o) {
     const info = await informacion(abs, st);
-    const copia = o.copia && info.video && /^(h264|hevc|av1|vp9)$/.test(info.video.codec);
-    const t = copia ? await claveAntes(abs, o.t) : o.t;
+    const copia = o.copia && copiable(info);
+    const t = o.t;
     const alto = [480, 720, 1080].includes(o.alto) ? o.alto : 1080;
     const audio = Math.max(0, Math.min(o.audio || 0, info.audios.length - 1));
     const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
+    if (copia) args.push('-noaccurate_seek');
     if (t > 0) args.push('-ss', t.toFixed(3));
     args.push('-i', `file:${abs}`, '-map', '0:v:0?');
     if (info.audios.length) args.push('-map', `0:a:${audio}`);
     args.push('-sn', '-dn', '-map_metadata', '-1', '-map_chapters', '-1');
     if (copia) { args.push('-c:v', 'copy'); if (info.video.codec === 'hevc') args.push('-tag:v', 'hvc1'); }
     else args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-vf', `scale=-2:'min(${alto},ih)'`, '-g', '50', '-threads', '4');
-    if (info.audios.length) args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
-    args.push('-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-frag_duration', '1000000', 'pipe:1');
-    res.setHeader('X-Arca-Inicio', String(t));
+    // Audio a estéreo, con el reloj del vídeo: si hay huecos o saltos en el
+    // original se rellenan, para que no se descompase
+    if (info.audios.length) args.push('-af', 'aresample=async=1000', '-c:a', 'aac', '-ac', '2', '-ar', '48000', '-b:a', '192k');
+    args.push('-avoid_negative_ts', 'make_zero', '-max_muxing_queue_size', '4096',
+      '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-frag_duration', '1000000', 'pipe:1');
     return emitir(req, res, sesion, args, 'video/mp4');
   }
   async function audio(req, res, sesion, abs, st, o) {
@@ -479,7 +515,7 @@ module.exports = function crearMedios({ DATOS, fallo }) {
     if (muestras.has(clave)) return muestras.get(clave);
     const res = []; let directos = 0;
     const cola2 = [[abs, rel, 0]]; let vistas = 0;
-    while (cola2.length && res.length < 4 && vistas < 40) {
+    while (cola2.length && res.length < 4 && vistas < 12) {
       const [d, r, nivel] = cola2.shift(); vistas++;
       let ents; try { ents = await fsp.readdir(d, { withFileTypes: true }); } catch { continue; }
       ents = ents.filter((e) => !oculto(e.name)).sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
@@ -487,7 +523,7 @@ module.exports = function crearMedios({ DATOS, fallo }) {
       const prio = (n) => ({ imagen: 0, imagenRara: 1, video: 2, pdf: 3, audio: 4 }[claseDe(n)] ?? 9);
       const cand = ents.filter((e) => e.isFile() && conImagen(e.name)).sort((a, b) => prio(a.name) - prio(b.name));
       for (const e of cand) { if (res.length >= 4) break; res.push(`${r}/${e.name.normalize('NFC')}`); }
-      if (nivel < 3) for (const e of ents) if (e.isDirectory()) cola2.push([path.join(d, e.name), `${r}/${e.name.normalize('NFC')}`, nivel + 1]);
+      if (nivel < 2) for (const e of ents) if (e.isDirectory()) cola2.push([path.join(d, e.name), `${r}/${e.name.normalize('NFC')}`, nivel + 1]);
     }
     const out = { rutas: res, elementos: directos };
     muestras.set(clave, out); if (muestras.size > 2000) muestras.delete(muestras.keys().next().value);
@@ -546,5 +582,5 @@ module.exports = function crearMedios({ DATOS, fallo }) {
   setTimeout(podarCache, 60000).unref();
   setInterval(podarCache, 12 * 3600 * 1000).unref();
 
-  return { claseDe, hay, listo, claveAntes, miniatura, vista, informacion, subtitulosExternos, video, audio, subtitulos, extracto, contenidoZip, muestraCarpeta, cortar };
+  return { claseDe, hay, listo, claveAntes, inicioReal, copiable, miniatura, vista, informacion, subtitulosExternos, video, audio, subtitulos, extracto, contenidoZip, muestraCarpeta, cortar };
 };
