@@ -11,8 +11,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Arca">
-  <link rel="apple-touch-icon" href="/iconos/apple-touch-icon.png?v=3">
-  <link rel="icon" href="/iconos/icono.svg?v=3" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/iconos/apple-touch-icon.png?v=4">
+  <link rel="icon" href="/iconos/icono.svg?v=4" type="image/svg+xml">
   <title>Arca</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/tema.js"></script>
@@ -22,7 +22,13 @@
   <header class="topbar">
     <div class="topbar-inner">
       <a class="marca" href="#" aria-label="Arca, ir al inicio">
-        <img src="/iconos/icono.svg?v=3" alt="" width="34" height="34">
+        <!-- Logo: la silueta de un cofre con su cierre y la A de Arca -->
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+          <path d="M4.5 14.5v-1C4.5 7.6 11.4 4 20 4s15.5 3.6 15.5 9.5v21.5a2 2 0 0 1-2 2h-27a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M4.5 14.5h13M22.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <rect x="17.5" y="11.5" width="5" height="6" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M14.2 32 20 21l5.8 11M16.3 28h7.4" fill="none" stroke="var(--acento)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
         <span class="marca-nombre">Arca</span>
       </a>
       <span class="miga" id="miga" hidden></span>

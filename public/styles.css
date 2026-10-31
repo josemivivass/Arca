@@ -531,7 +531,7 @@ html.con-visor, html.con-visor body { overflow: hidden; }
    base de las letras quedan a la misma altura en cualquier pantalla, sea cual
    sea el tamaño de la letra. --hueco es lo que queda bajo el dibujo dentro de
    su recuadro (de 40 unidades). En el ordenador, el nombre más grande. */
-.marca { --logo: 34px; --sep: 10px; --hueco: .125; display: block; white-space: nowrap; line-height: 1; }
+.marca { --logo: 34px; --sep: 10px; --hueco: .055; display: block; white-space: nowrap; line-height: 1; }
 .marca svg, .marca img { display: inline-block; vertical-align: baseline; width: var(--logo); height: var(--logo); margin: 0 var(--sep) calc(var(--logo) * var(--hueco) * -1) 0; }
 @media (min-width: 1280px) { .marca-nombre { font-size: 2.15rem; } }
 @media (max-width: 760px) { .marca { --logo: 28px; --sep: 7px; } }
@@ -542,3 +542,24 @@ html.con-visor, html.con-visor body { overflow: hidden; }
 .velo { top: var(--arriba-visible, 0px); bottom: auto; height: var(--alto-visible, 100dvh); }
 .dialogo { max-height: calc(var(--alto-visible, 100dvh) - 32px); }
 html.con-teclado .velo { align-items: flex-start; padding-top: 8px; }
+
+/* ---------- mismos estilos que Venditor, Expensae y Mutare ---------- */
+/* Cabecera de la lista como la de sus tablas: sin mayúsculas, línea de tinta */
+.fila-arch.cab { font-size: .8rem; font-weight: 500; text-transform: none; letter-spacing: 0; background: var(--superficie); border-bottom: 1px solid var(--borde-fuerte); }
+/* Nombres en Newsreader, como los conceptos y operaciones */
+.fila-arch .nombre b { font-family: var(--serif); font-weight: 500; font-size: 1.07rem; line-height: 1.3; }
+.cuadricula .fila-arch .nombre b { font-size: .98rem; }
+.fila-arch:hover { background: var(--acento-suave); }
+.fila-arch.sel { background: color-mix(in srgb, var(--acento) 16%, transparent); }
+.vacio { padding: 36px; font-size: 1.05rem; }
+/* Diálogos como los suyos: título grande en cursiva y pie con línea */
+.dialogo > header { padding: 14px 20px 4px; }
+.dialogo > header h2 { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 1.6rem; line-height: 1.15; }
+.dialogo > .cuerpo { padding: 8px 20px 14px; }
+.dialogo > footer { padding: 12px 20px; border-top: 1px solid var(--borde); }
+.papelera-cab h2 { font-style: italic; font-weight: 400; }
+@media (max-width: 760px) {
+  .dialogo > header { padding: 12px 14px 2px; } .dialogo > header h2 { font-size: 1.4rem; }
+  .dialogo > .cuerpo { padding: 6px 14px 10px; } .dialogo > footer { padding: 10px 14px; }
+  .dialogo > footer .btn { flex: 1 1 0; }
+}
