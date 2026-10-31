@@ -583,7 +583,7 @@ html.con-teclado .velo { align-items: flex-start; padding-top: 8px; }
 }
 /* Tiras que se deslizan de lado, sin barra (pestañas de las hojas de cálculo) */
 .pestanas-hoja { scrollbar-width: none; } .pestanas-hoja::-webkit-scrollbar { display: none; }
-/* Sin barras de desplazamiento en ningún sitio (se sigue pudiendo desplazar
-   con la rueda, el dedo o el teclado) */
-* { scrollbar-width: none; }
-*::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* El explorador de archivos (la página) se desplaza sin barra; el visor y
+   los menús la mantienen */
+html { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
