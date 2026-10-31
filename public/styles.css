@@ -581,3 +581,5 @@ html.con-teclado .velo { align-items: flex-start; padding-top: 8px; }
   .lateral .disco b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lateral .disco small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+/* Tiras que se deslizan de lado, sin barra (pestañas de las hojas de cálculo) */
+.pestanas-hoja { scrollbar-width: none; } .pestanas-hoja::-webkit-scrollbar { display: none; }
