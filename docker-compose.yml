@@ -18,6 +18,6 @@ services:
     volumes:
       - ./prueba-discos:/discos/prueba
       - arca-datos:/datos
-    mem_limit: 128m
+    mem_limit: 1g
 volumes:
   arca-datos:

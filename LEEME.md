@@ -9,8 +9,20 @@ los discos, así que lo que ves en Arca es exactamente lo que hay en el disco.
 - **Navegar** por varios discos a la vez, con el espacio libre de cada uno.
   Vista de lista o cuadrícula (con miniaturas de las fotos), orden por nombre,
   tamaño o fecha, y buscador que mira en la carpeta y en todas las de dentro.
-- **Ver sin descargar**: fotos, vídeo y audio (se puede saltar a cualquier
-  punto del vídeo), PDF y textos. Con flechas para pasar al siguiente.
+- **Miniaturas de todo**: fotos (también HEIC, TIFF, RAW…), vídeos, PDF,
+  carátulas de discos, el principio de textos, Word, Excel, presentaciones y
+  ZIP, y las carpetas con hasta cuatro cosas de dentro. Sin recortar: cada
+  miniatura conserva la forma del original. Se generan en el servidor la
+  primera vez y se guardan (caché de 3 GB como mucho, `ARCA_CACHE_MB`).
+- **Ver sin descargar cualquier archivo**: fotos con zoom, PDF página a página,
+  Word, hojas de cálculo (con sus pestañas), Markdown, textos y código, ZIP,
+  audio y vídeo.
+- **Películas enteras**, aunque pesen 15 GB: se reproducen tal cual y se salta
+  a cualquier punto al momento. Si el navegador no entiende el formato (MKV con
+  HEVC, audio AC3/DTS, AVI…), el servidor lo convierte al vuelo («modo
+  compatible»), sin recomprimir la imagen cuando no hace falta. Con elección de
+  pista de audio, subtítulos (los de dentro del vídeo y los `.srt`/`.ass`
+  sueltos con el mismo nombre), y recuerda por dónde ibas.
 - **Subir** archivos o carpetas enteras, arrastrándolos a la página o con los
   botones. Con barra de progreso; si ya existe un archivo con ese nombre se
   guarda como «nombre (2)», nunca se pisa nada.
@@ -50,6 +62,9 @@ No tiene dependencias: no hace falta `npm install`. Con Docker hay un
 | `ARCA_USUARIO` | Usuario | `arca` |
 | `ARCA_CLAVE` | Contraseña **inicial** | una al azar (sale en el log) |
 | `ARCA_PAPELERA_DIAS` | Días que se guarda lo borrado | `30` |
+| `ARCA_CACHE_MB` | Tamaño máximo de la caché de miniaturas y subtítulos | `3000` |
+| `ARCA_TRABAJOS` | Miniaturas que se generan a la vez | `2` |
+| `ARCA_DIRECTOS` | Vídeos convertidos al vuelo a la vez (todo el servidor) | `3` |
 | `ARCA_DATOS` | Dónde guarda la contraseña y las sesiones | `./datos` (`/datos` en Docker) |
 
 La contraseña de `ARCA_CLAVE` solo se usa la primera vez: se guarda cifrada
@@ -80,13 +95,25 @@ y, si el aviso no llega, el servidor revisa este repositorio cada 5 minutos.
 
 ## Cómo está hecho
 
-- `server.js`: servidor y API JSON en un solo archivo, solo con módulos de
-  Node. Las subidas se escriben en un archivo temporal oculto y se renombran
+- `server.js`: servidor y API JSON, solo con módulos de Node.
+- `medios.js`: miniaturas, vistas, información de vídeos y audios, conversión
+  al vuelo y subtítulos. Usa `ffmpeg`, `vipsthumbnail` y `pdftoppm` si están
+  (en Docker van en la imagen); si falta alguno, esas miniaturas no se hacen. Las subidas se escriben en un archivo temporal oculto y se renombran
   al terminar (si se corta, no queda un archivo a medias). El ZIP se escribe
   en flujo (con ZIP64 para archivos de más de 4 GB). Las miniaturas salen de
   la que lleva dentro cada foto JPG (EXIF), sin procesar la imagen.
-- `public/`: la web (`app.js`, `styles.css`, `index.html`), el service worker
+- `public/`: la web (`app.js`, `visor.js` para abrir los archivos, `styles.css`, `index.html`), el service worker
   (`sw.js`, que nunca guarda respuestas de la API) y los iconos.
+
+## Librerías del visor (en `public/vendor/`, se cargan solo al abrir ese tipo de archivo)
+
+| Librería | Versión | Para qué | Licencia |
+|----------|---------|----------|----------|
+| pdf.js | 6.2.108 | PDF | Apache 2.0 |
+| SheetJS (xlsx) | 0.20.3 | Hojas de cálculo | Apache 2.0 |
+| mammoth | 1.8.0 | Word (en `aislado.html`, sin acceso a la red) | BSD-2 |
+| marked | 18.0.10 | Markdown | MIT |
+| DOMPurify | 3.4.14 | Limpiar el HTML antes de enseñarlo | MPL 2.0 / Apache 2.0 |
 
 ## Fuentes
 

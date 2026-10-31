@@ -23,6 +23,7 @@ const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { pipeline } = require('stream/promises');
+const crearMedios = require('./medios');
 
 const PORT = Number(process.env.PORT) || 9995;
 const PUBLICO = path.join(__dirname, 'public');
@@ -46,8 +47,8 @@ const SOLO_LECTURA = (process.env.ARCA_SOLO_LECTURA || '').split(';').map((x) =>
 // Utilidades de respuesta
 // ---------------------------------------------------------------------------
 const CSP = [
-  "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data:", "media-src 'self' blob:", "frame-src 'self'", "connect-src 'self'",
+  "default-src 'self'", "script-src 'self' 'wasm-unsafe-eval'", "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' blob: data:", "media-src 'self' blob:", "frame-src 'self' blob:", "connect-src 'self'",
   "font-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'self'",
 ].join('; ');
 const COMUNES = { 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
@@ -70,11 +71,13 @@ const TIPOS = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.bmp': 'image/bmp', '.ico': 'image/x-icon', '.heic': 'image/heic', '.woff2': 'font/woff2',
-  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo',
+  // MKV se anuncia como WebM: es el mismo formato y así lo abren Chrome y Firefox
+  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/mp4', '.mkv': 'video/webm', '.avi': 'video/x-msvideo', '.ogv': 'video/ogg',
   '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.m4b': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac', '.wav': 'audio/wav',
   '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.csv': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8',
   '.srt': 'text/plain; charset=utf-8', '.xml': 'text/plain; charset=utf-8', '.ini': 'text/plain; charset=utf-8', '.yml': 'text/plain; charset=utf-8', '.yaml': 'text/plain; charset=utf-8',
-  '.zip': 'application/zip',
+  '.wasm': 'application/wasm', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf', '.icc': 'application/octet-stream',
+  '.zip': 'application/zip', '.oga': 'audio/ogg', '.vtt': 'text/vtt; charset=utf-8',
 };
 const tipoDe = (n) => TIPOS[path.extname(n).toLowerCase()] || 'application/octet-stream';
 
@@ -219,42 +222,6 @@ async function espacio() {
 }
 
 // ---------------------------------------------------------------------------
-// Miniaturas: la que llevan dentro las fotos JPG (EXIF), sin procesar nada
-// ---------------------------------------------------------------------------
-async function miniaturaExif(abs) {
-  const fh = await fsp.open(abs, 'r');
-  try {
-    const buf = Buffer.alloc(128 * 1024);
-    const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
-    const b = buf.subarray(0, bytesRead);
-    if (b[0] !== 0xff || b[1] !== 0xd8) return null;
-    let p = 2;
-    while (p + 4 < b.length && b[p] === 0xff) {
-      const m = b[p + 1], n = b.readUInt16BE(p + 2);
-      if (m === 0xe1 && b.toString('latin1', p + 4, p + 8) === 'Exif') {
-        const t = b.subarray(p + 10, p + 2 + n);
-        const le = t.readUInt16BE(0) === 0x4949;
-        const u16 = (o) => (le ? t.readUInt16LE(o) : t.readUInt16BE(o)), u32 = (o) => (le ? t.readUInt32LE(o) : t.readUInt32BE(o));
-        const ifd0 = u32(4); if (ifd0 + 2 > t.length) return null;
-        const ifd1 = u32(ifd0 + 2 + u16(ifd0) * 12); if (!ifd1 || ifd1 + 2 > t.length) return null;
-        let ini = 0, lon = 0;
-        for (let k = 0, c = u16(ifd1); k < c; k++) {
-          const e = ifd1 + 2 + k * 12; if (e + 12 > t.length) break;
-          const tag = u16(e);
-          if (tag === 0x0201) ini = u32(e + 8);
-          if (tag === 0x0202) lon = u32(e + 8);
-        }
-        if (!ini || !lon || ini + lon > t.length) return null;
-        return Buffer.from(t.subarray(ini, ini + lon));
-      }
-      if (m === 0xda) break;
-      p += 2 + n;
-    }
-    return null;
-  } finally { await fh.close(); }
-}
-
-// ---------------------------------------------------------------------------
 // Enviar un archivo, con rangos (para saltar dentro de vídeos y audios)
 // ---------------------------------------------------------------------------
 async function enviarArchivo(req, res, abs, nombre, descargar) {
@@ -279,7 +246,7 @@ async function enviarArchivo(req, res, abs, nombre, descargar) {
   cab['Content-Length'] = st.size ? fin - ini + 1 : 0;
   res.writeHead(codigo, cab);
   if (req.method === 'HEAD' || !st.size) return res.end();
-  await pipeline(fs.createReadStream(abs, { start: ini, end: fin }), res).catch(() => {});
+  await pipeline(fs.createReadStream(abs, { start: ini, end: fin, highWaterMark: 1 << 20 }), res).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -556,10 +523,13 @@ async function estatico(req, res, rel) {
   let st; try { st = await fsp.stat(abs); } catch { fallo(404, 'No encontrado'); }
   if (!st.isFile()) fallo(404, 'No encontrado');
   const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
-  const inmutable = /^\/(fuentes|iconos)\//.test(rel);
+  const inmutable = /^\/(fuentes|iconos|vendor)\//.test(rel);
   const cab = { 'Content-Type': tipoDe(abs), ETag: etag, 'Cache-Control': inmutable ? 'public, max-age=31536000, immutable' : 'no-cache', ...COMUNES };
+  // Página aislada para mammoth (Word), que necesita evaluar código: puede
+  // hacerlo, pero no puede conectarse a nada
+  if (rel === '/aislado.html') cab['Content-Security-Policy'] = "default-src 'none'; script-src 'self' 'unsafe-eval'; img-src blob: data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
   if (req.headers['if-none-match'] === etag) { res.writeHead(304, cab); return res.end(); }
-  if (/\.(html|css|js|json|webmanifest|svg)$/.test(abs) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+  if (/\.(html|css|m?js|json|webmanifest|svg|wasm)$/.test(abs) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
     let c = cacheGz.get(abs);
     if (!c || c.etag !== etag) { c = { etag, gz: zlib.gzipSync(await fsp.readFile(abs), { level: 9 }) }; cacheGz.set(abs, c); }
     res.writeHead(200, { ...cab, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Content-Length': c.gz.length });
@@ -568,6 +538,15 @@ async function estatico(req, res, rel) {
   res.writeHead(200, { ...cab, 'Content-Length': st.size });
   if (req.method === 'HEAD') return res.end();
   fs.createReadStream(abs).pipe(res);
+}
+
+// Archivo de la caché de medios (miniaturas, vistas): no cambia nunca, la
+// dirección lleva la fecha y el tamaño del original
+const TIPO_CACHE = { webp: 'image/webp', jpg: 'image/jpeg', png: 'image/png', vtt: 'text/vtt; charset=utf-8' };
+function enviarCache(req, res, m) {
+  res.writeHead(200, { ...COMUNES, 'Content-Type': TIPO_CACHE[m.ext] || 'application/octet-stream', 'Content-Length': m.tam, 'Cache-Control': 'private, max-age=31536000, immutable' });
+  if (req.method === 'HEAD') return res.end();
+  return pipeline(fs.createReadStream(m.archivo), res).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -610,10 +589,64 @@ async function api(req, res, url) {
   if (ruta === '/api/archivo') { const o = await resolver(url.searchParams.get('ruta')); return enviarArchivo(req, res, o.abs, path.basename(o.abs), url.searchParams.get('descargar') === '1'); }
   if (ruta === '/api/miniatura') {
     const o = await resolver(url.searchParams.get('ruta'));
-    const mini = /\.jpe?g$/i.test(o.abs) ? await miniaturaExif(o.abs).catch(() => null) : null;
-    if (!mini) { res.writeHead(204, COMUNES); return res.end(); }
-    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': mini.length, 'Cache-Control': 'private, max-age=86400', ...COMUNES });
-    return res.end(mini);
+    const st = await fsp.stat(o.abs); if (st.isDirectory()) fallo(400, 'Es una carpeta');
+    const m = await medios.miniatura(o.abs, st);
+    if (!m) { res.writeHead(204, { 'Cache-Control': 'private, max-age=3600', ...COMUNES }); return res.end(); }
+    return enviarCache(req, res, m);
+  }
+  // Imagen para ver en grande: SVG tal cual (sin poder ejecutar nada) y las
+  // que el navegador no abre (HEIC, TIFF, RAW…) convertidas
+  if (ruta === '/api/vista') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    const st = await fsp.stat(o.abs); if (st.isDirectory()) fallo(400, 'Es una carpeta');
+    if (/\.svg$/i.test(o.abs)) {
+      if (st.size > 20 << 20) fallo(413, 'Demasiado grande');
+      const d = await fsp.readFile(o.abs);
+      res.writeHead(200, { ...COMUNES, 'Content-Type': 'image/svg+xml', 'Content-Length': d.length, 'Cache-Control': 'private, no-cache', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox" });
+      return res.end(d);
+    }
+    return enviarCache(req, res, await medios.vista(o.abs, st));
+  }
+  if (ruta === '/api/medio') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    const st = await fsp.stat(o.abs);
+    const info = await medios.informacion(o.abs, st);
+    return json(res, 200, { ...info, externos: await medios.subtitulosExternos(o.abs) });
+  }
+  if (ruta === '/api/video' || ruta === '/api/audio') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    const st = await fsp.stat(o.abs); if (st.isDirectory()) fallo(400, 'Es una carpeta');
+    const q = url.searchParams;
+    const opciones = { t: Math.max(0, Number(q.get('t')) || 0), audio: Number(q.get('audio')) || 0, copia: q.get('copia') === '1', alto: Number(q.get('alto')) || 1080 };
+    return medios[ruta === '/api/video' ? 'video' : 'audio'](req, res, cookieDe(req), o.abs, st, opciones);
+  }
+  // Fotograma clave en o antes de t: desde ahí empieza la copia sin recomprimir
+  if (ruta === '/api/punto') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    return json(res, 200, { t: await medios.claveAntes(o.abs, Math.max(0, Number(url.searchParams.get('t')) || 0)) });
+  }
+  if (ruta === '/api/subtitulos') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    const st = await fsp.stat(o.abs);
+    const q = url.searchParams;
+    const vtt = await medios.subtitulos(o.abs, st, q.has('externo') ? { externo: q.get('externo') } : { pista: Math.max(0, Number(q.get('pista')) || 0) });
+    res.writeHead(200, { ...COMUNES, 'Content-Type': 'text/vtt; charset=utf-8', 'Content-Length': vtt.length, 'Cache-Control': 'private, max-age=86400' });
+    return res.end(vtt);
+  }
+  if (ruta === '/api/extracto') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    const st = await fsp.stat(o.abs); if (st.isDirectory()) fallo(400, 'Es una carpeta');
+    const x = await medios.extracto(o.abs, st, url.searchParams.get('completo') === '1').catch(() => null);
+    if (!x) { res.writeHead(204, COMUNES); return res.end(); }
+    return json(res, 200, x, { 'Cache-Control': 'private, max-age=31536000, immutable' });
+  }
+  if (ruta === '/api/contenido-zip') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    return json(res, 200, await medios.contenidoZip(o.abs).catch(() => fallo(415, 'No se puede leer este ZIP')));
+  }
+  if (ruta === '/api/muestra') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    return json(res, 200, await medios.muestraCarpeta(o.abs, o.rel, oculto), { 'Cache-Control': 'private, max-age=60' });
   }
   if (ruta === '/api/zip') {
     const rutas = JSON.parse(url.searchParams.get('rutas') || '[]');
@@ -660,6 +693,7 @@ async function api(req, res, url) {
 
 // ---------------------------------------------------------------------------
 cargarAcceso();
+const medios = crearMedios({ DATOS, fallo });
 const servidor = http.createServer(async (req, res) => {
   let url;
   try { url = new URL(req.url, 'http://arca'); } catch { return json(res, 400, { error: 'Ruta no válida' }); }

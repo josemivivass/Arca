@@ -2,8 +2,8 @@
 // Service worker de Arca: solo para poder instalarla como app y que la interfaz
 // abra rápido. Los archivos y la API (/api/...) van siempre en directo al
 // servidor y nunca se guardan en el dispositivo.
-const CACHE = 'arca-v2';
-const INTERFAZ = ['/', '/index.html', '/styles.css', '/tema.js', '/app.js', '/manifest.webmanifest', '/iconos/icono.svg?v=2', '/iconos/icono-192.png?v=2'];
+const CACHE = 'arca-v3';
+const INTERFAZ = ['/', '/index.html', '/styles.css', '/tema.js', '/app.js', '/visor.js', '/manifest.webmanifest', '/iconos/icono.svg?v=3', '/iconos/icono-192.png?v=3'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(INTERFAZ)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

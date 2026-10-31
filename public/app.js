@@ -1,4 +1,6 @@
-// Arca: interfaz. Un solo módulo, sin librerías.
+// Arca: interfaz. Sin librerías (el visor carga las suyas solo al abrir PDF,
+// hojas de cálculo, Word o Markdown).
+import { abrirVisor } from './visor.js';
 // Rutas (#): #/disco/carpeta/…  ·  #papelera/disco  ·  vacío = primer disco
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -18,6 +20,9 @@ const I = {
   audio: svg('<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>'),
   pdf: svg('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 16.5h4"/>'),
   texto: svg('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 11h6M9 14h6M9 17h4"/>'),
+  hoja: svg('<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M4 8.5h16M4 14h16M10 3v18"/>'),
+  documento: svg('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 15h6M9 18h3"/>'),
+  presentacion: svg('<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M12 16v4M8 20h8M7 8h6M7 11h9"/>'),
   zip: svg('<path d="M6 3h12v18H6z"/><path d="M11 3v2h2v2h-2v2h2v2h-2v2h2"/><rect x="10" y="14" width="4" height="4" rx="1"/>'),
   disco: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14h18M7 16.5h.01M10 16.5h.01"/>'),
   papelera: svg('<path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/>'),
@@ -56,19 +61,27 @@ function tamano(b) {
   return `${b.toLocaleString('es-ES', { maximumFractionDigits: b < 10 ? 1 : 0 })} ${u[i]}`;
 }
 const fecha = (ms) => new Date(ms).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const fechaCorta = (ms) => new Date(ms).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
 const ext = (n) => (n.match(/\.([^.]+)$/)?.[1] || '').toLowerCase();
 function claseDe(e) {
   if (e.dir) return 'carpeta';
   const x = ext(e.nombre);
-  if (/^(jpe?g|png|gif|webp|avif|bmp|svg|heic|tiff?)$/.test(x)) return 'imagen';
-  if (/^(mp4|m4v|webm|mov|mkv|avi|wmv|mpe?g|ts|3gp)$/.test(x)) return 'video';
-  if (/^(mp3|m4a|m4b|aac|ogg|opus|flac|wav|wma|aiff?)$/.test(x)) return 'audio';
+  if (/^(jpe?g|jfif|png|gif|webp|avif|bmp|ico|svg|heic|heif|tiff?|jxl|psd|dng|cr2|cr3|nef|arw|orf|rw2|raf)$/.test(x)) return 'imagen';
+  if (/^(mp4|m4v|webm|mov|mkv|avi|wmv|mpe?g|ts|m2ts|mts|3gp|flv|ogv|vob|divx|asf)$/.test(x)) return 'video';
+  if (/^(mp3|m4a|m4b|aac|ogg|oga|opus|flac|wav|wma|aiff?|ac3|eac3|dts|ape|mka|amr)$/.test(x)) return 'audio';
   if (x === 'pdf') return 'pdf';
-  if (/^(zip|rar|7z|tar|gz|bz2|xz)$/.test(x)) return 'zip';
-  if (/^(txt|md|csv|log|json|xml|ini|ya?ml|srt|vtt|conf|sh|js|py|html?|css)$/.test(x)) return 'texto';
+  if (/^(xlsx|xls|xlsm|ods|csv|tsv)$/.test(x)) return 'hoja';
+  if (/^(docx?|odt|rtf)$/.test(x)) return 'documento';
+  if (/^(pptx?|odp|key)$/.test(x)) return 'presentacion';
+  if (/^(zip|rar|7z|tar|gz|bz2|xz|tgz)$/.test(x)) return 'zip';
+  if (/^(txt|md|markdown|log|json|xml|ini|cfg|conf|ya?ml|toml|srt|vtt|ass|sh|bat|ps1|m?js|ts|py|java|c|h|cpp|cs|go|rs|php|rb|sql|html?|s?css|env|nfo|properties)$/.test(x)) return 'texto';
   return 'archivo';
 }
-const previsualizable = (e) => ['imagen', 'video', 'audio', 'pdf', 'texto'].includes(claseDe(e)) && !/^(heic|tiff?|avi|wmv|mkv|mpe?g|ts|wma|aiff?)$/.test(ext(e.nombre));
+// Qué miniatura lleva cada cosa: imagen (la genera el servidor), extracto
+// (el principio del texto o de la tabla) o nada (icono)
+const conMiniatura = (e) => ['imagen', 'video', 'pdf', 'audio'].includes(claseDe(e)) || /^(odt|ods|odp|docx|xlsx|pptx)$/.test(ext(e.nombre));
+const conExtracto = (e) => (['texto', 'hoja', 'documento', 'presentacion'].includes(claseDe(e)) && !/^(doc|xls|ppt|rtf|key)$/.test(ext(e.nombre))) || ext(e.nombre) === 'zip';
+const version = (e) => `${Math.floor(e.mod)}-${e.tam}`;
 const url = (ruta, extra = '') => `/api/archivo?ruta=${encodeURIComponent(ruta)}${extra}`;
 
 function aviso(msg, error = false) {
@@ -306,13 +319,54 @@ function pintarExplorador() {
 }
 
 function iconoFila(e) {
-  const c = claseDe(e);
-  if (c === 'imagen' && estado.vista === 'cuadricula' && !/^(heic|tiff?)$/.test(ext(e.nombre))) {
-    const r = rutaDe(e);
-    // Primero la miniatura que llevan dentro las fotos; si no hay y la imagen es pequeña, la imagen
-    return `<img loading="lazy" alt="" src="/api/miniatura?ruta=${encodeURIComponent(r)}" data-completa="${e.tam < 4 * 1024 * 1024 ? esc(url(r)) : ''}">`;
-  }
-  return I[c] || I.archivo;
+  const c = claseDe(e), r = rutaDe(e), icono = I[c] || I.archivo;
+  const cuadricula = estado.vista === 'cuadricula';
+  if (e.dir) return cuadricula ? `${icono}<span class="mosaico" data-muestra="${esc(r)}"></span>` : icono;
+  const fuente = ext(e.nombre) === 'svg' && e.tam < 2 << 20 ? '/api/vista' : '/api/miniatura'; // los SVG pequeños, tal cual
+  const img = conMiniatura(e) ? `<img loading="lazy" decoding="async" alt="" src="${fuente}?ruta=${encodeURIComponent(r)}&v=${version(e)}">` : '';
+  const extracto = cuadricula && conExtracto(e) ? `<span class="extracto" data-extracto="${esc(r)}" data-v="${version(e)}"></span>` : '';
+  const insignia = c === 'video' || c === 'audio' ? `<span class="insignia">${c === 'video' ? I.video : I.audio}</span>` : '';
+  return `${icono}${img}${extracto}${insignia}`;
+}
+
+// Miniaturas que se rellenan al verse: mosaicos de carpetas y extractos de textos
+const observador = 'IntersectionObserver' in window ? new IntersectionObserver((ents) => {
+  for (const x of ents) if (x.isIntersecting) { observador.unobserve(x.target); rellenar(x.target); }
+}, { rootMargin: '300px 0px' }) : null;
+async function rellenar(el) {
+  try {
+    if (el.dataset.muestra) {
+      const m = await api(`/api/muestra?ruta=${encodeURIComponent(el.dataset.muestra)}`);
+      const ico = el.closest('.ico');
+      ico?.insertAdjacentHTML('beforeend', `<small class="cuantos">${m.elementos ? `${m.elementos} elemento${m.elementos === 1 ? '' : 's'}` : 'Vacía'}</small>`);
+      if (!m.rutas.length) return;
+      el.dataset.n = m.rutas.length;
+      el.innerHTML = m.rutas.map((r) => `<img loading="lazy" decoding="async" alt="" src="/api/miniatura?ruta=${encodeURIComponent(r)}">`).join('');
+      el.querySelectorAll('img').forEach((i) => i.addEventListener('error', () => { i.remove(); el.dataset.n = el.children.length; if (!el.children.length) ico?.classList.remove('con-mosaico'); }));
+      ico?.classList.add('con-mosaico');
+      return;
+    }
+    if (el.dataset.extracto) {
+      const res = await fetch(`/api/extracto?ruta=${encodeURIComponent(el.dataset.extracto)}&v=${el.dataset.v}`);
+      if (res.status !== 200) return;
+      const x = await res.json();
+      if (x.tipo === 'tabla') el.innerHTML = `<table>${x.filas.map((f) => `<tr>${f.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table>`;
+      else if (x.tipo === 'lista') el.innerHTML = `<ul>${x.items.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`;
+      else el.textContent = x.texto || '';
+      if (!el.textContent.trim()) return;
+      el.classList.add('lleno', x.tipo);
+      el.closest('.ico')?.classList.add('con-extracto');
+    }
+  } catch {}
+}
+function prepararMiniaturas(raiz) {
+  raiz.querySelectorAll('.ico > img').forEach((img) => {
+    const ok = () => { if (img.naturalWidth) img.closest('.ico')?.classList.add('con-imagen'); };
+    img.addEventListener('load', ok, { once: true });
+    img.addEventListener('error', () => img.remove(), { once: true });
+    if (img.complete) ok();
+  });
+  raiz.querySelectorAll('[data-muestra], [data-extracto]').forEach((el) => (observador ? observador.observe(el) : rellenar(el)));
 }
 
 function pintarLista() {
@@ -330,14 +384,12 @@ function pintarLista() {
         <span class="ico ${claseDe(e)}">${iconoFila(e)}</span>
         <span class="nombre"><b title="${esc(e.nombre)}">${esc(e.nombre)}${e.protegida ? `<span class="solo-lectura" title="Solo lectura">${I.candado}</span>` : ''}</b>
           ${estado.resultados ? `<small>${esc(r.split('/').slice(0, -1).join(' / '))}</small>` : `<small class="solo-movil">${e.dir ? '' : tamano(e.tam) + ' · '}${fecha(e.mod)}</small>`}</span>
-        <span class="tam">${e.dir ? '' : tamano(e.tam)}</span><span class="fecha">${fecha(e.mod)}</span></div>`;
+        <span class="tam">${e.dir ? '' : tamano(e.tam)}</span><span class="fecha">${fecha(e.mod)}</span>
+        <small class="meta-cuadricula">${e.dir ? '' : `${tamano(e.tam)} · `}${fechaCorta(e.mod)}</small></div>`;
     }).join('');
   }
   lista.classList.toggle('seleccionando', estado.sel.size > 0);
-  $$('img[data-completa]', lista).forEach((img) => img.addEventListener('error', () => {
-    const c = img.dataset.completa;
-    if (c && img.src.indexOf('/api/archivo') < 0) img.src = c; else img.replaceWith(document.createRange().createContextualFragment(I.imagen));
-  }));
+  prepararMiniaturas(lista);
   pintarSeleccion();
 }
 // En pantallas grandes la línea pequeña bajo el nombre sobra (hay columnas)
@@ -645,49 +697,9 @@ $('#buscar').addEventListener('input', (e) => {
 $('#buscar').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.target.value = ''; e.target.dispatchEvent(new Event('input')); } });
 
 // ---------------------------------------------------------------------------
-// Vista previa
+// Vista previa (visor.js)
 // ---------------------------------------------------------------------------
-function abrirPrevia(ents, k) {
-  const conPrevia = ents.map((e, i) => [e, i]).filter(([e]) => !e.dir);
-  let pos = conPrevia.findIndex(([, i]) => i === k);
-  const capa = document.createElement('div');
-  capa.className = 'previa';
-  document.body.appendChild(capa);
-  const cerrar = () => { capa.remove(); removeEventListener('keydown', tecla); };
-  const tecla = (e) => {
-    if (e.key === 'Escape') cerrar();
-    if (e.key === 'ArrowRight') mover(1);
-    if (e.key === 'ArrowLeft') mover(-1);
-  };
-  addEventListener('keydown', tecla);
-  const mover = (p) => { const n = pos + p; if (n >= 0 && n < conPrevia.length) { pos = n; pintar(); } };
-  async function pintar() {
-    const [e] = conPrevia[pos], r = rutaDe(e), c = claseDe(e);
-    capa.innerHTML = `<header><b title="${esc(e.nombre)}">${esc(e.nombre)}</b><small>${tamano(e.tam)}</small>
-      <a class="btn pequeno" href="${esc(url(r, '&descargar=1'))}" download>${I.descargar}Descargar</a>
-      <button type="button" class="btn-icono" data-p="cerrar" aria-label="Cerrar">${I.cerrar}</button></header>
-      <div class="escena"></div>`;
-    const escena = $('.escena', capa);
-    if (!previsualizable(e)) escena.innerHTML = `<div class="sin-previa">${I[c] || I.archivo}<p>No se puede ver aquí. Descárgalo para abrirlo.</p></div>`;
-    else if (c === 'imagen') escena.innerHTML = `<img alt="${esc(e.nombre)}" src="${esc(url(r))}">`;
-    else if (c === 'video') escena.innerHTML = `<video controls autoplay playsinline src="${esc(url(r))}"></video>`;
-    else if (c === 'audio') escena.innerHTML = `<audio controls autoplay src="${esc(url(r))}"></audio>`;
-    else if (c === 'pdf') escena.innerHTML = `<iframe title="${esc(e.nombre)}" src="${esc(url(r))}"></iframe>`;
-    else if (c === 'texto') {
-      escena.innerHTML = '<pre>Cargando…</pre>';
-      try { const res = await fetch(url(r), { headers: { Range: 'bytes=0-262143' } }); const t = await res.text(); $('pre', escena).textContent = t + (e.tam > 262144 ? '\n\n… (solo se enseña el principio)' : ''); }
-      catch { $('pre', escena).textContent = 'No se pudo leer'; }
-    }
-    if (pos > 0) escena.insertAdjacentHTML('beforeend', `<button type="button" class="paso ant" data-p="-1" aria-label="Anterior">${I.izquierda}</button>`);
-    if (pos < conPrevia.length - 1) escena.insertAdjacentHTML('beforeend', `<button type="button" class="paso sig" data-p="1" aria-label="Siguiente">${I.derecha}</button>`);
-  }
-  capa.addEventListener('click', (e) => {
-    const p = e.target.closest('[data-p]')?.dataset.p;
-    if (p === 'cerrar') cerrar(); else if (p) mover(Number(p));
-    else if (e.target.classList.contains('escena')) cerrar();
-  });
-  pintar();
-}
+function abrirPrevia(ents, k) { abrirVisor(ents, k, { rutaDe, icono: (e) => I[claseDe(e)] || I.archivo, aviso }); }
 
 // ---------------------------------------------------------------------------
 // Papelera
@@ -745,3 +757,32 @@ addEventListener('keydown', (e) => {
 
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 arrancar().catch(() => pantallaAcceso());
+
+// ---------------------------------------------------------------------------
+// Teclado del móvil: los diálogos se ajustan al hueco que deja libre y el
+// campo en el que se escribe queda siempre a la vista (también en iPhone, que
+// no encoge la página al sacar el teclado)
+// ---------------------------------------------------------------------------
+(() => {
+  const vv = window.visualViewport;
+  const raiz = document.documentElement;
+  let maximo = 0, ancho = innerWidth;
+  const enDialogo = (el) => el && el.closest && el.closest('dialog, [role=dialog], .velo');
+  const aLaVista = () => {
+    const c = document.activeElement;
+    if (!c || !c.matches || !c.matches('input, textarea, select, [contenteditable]') || !enDialogo(c)) return;
+    c.scrollIntoView({ block: 'center', inline: 'nearest' });
+  };
+  const ajustar = () => {
+    if (!vv) return;
+    if (innerWidth !== ancho) { ancho = innerWidth; maximo = 0; } // al girar el móvil
+    raiz.style.setProperty('--alto-visible', `${Math.round(vv.height)}px`);
+    raiz.style.setProperty('--arriba-visible', `${Math.round(vv.offsetTop)}px`);
+    maximo = Math.max(maximo, vv.height);
+    const teclado = vv.height < maximo * 0.78;
+    raiz.classList.toggle('con-teclado', teclado);
+    if (teclado) requestAnimationFrame(aLaVista);
+  };
+  if (vv) { vv.addEventListener('resize', ajustar); vv.addEventListener('scroll', ajustar); ajustar(); }
+  document.addEventListener('focusin', (e) => { if (enDialogo(e.target)) setTimeout(aLaVista, 350); });
+})();
