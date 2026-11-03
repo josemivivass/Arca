@@ -131,6 +131,11 @@ for (const tipo of ['submit', 'click']) {
     if (esEnvio) ultimoEnvio.set(el, Date.now());
   }, true);
 }
+// Lo mismo con el teclado: Enter (guarda), Supr (borra) y F2 (renombra)
+// esperan a que acabe lo que se está guardando
+document.addEventListener('keydown', (e) => {
+  if (guardando && ['Enter', 'Delete', 'F2'].includes(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
 
 // Diálogo genérico: devuelve una promesa con el valor o null
 function dialogo({ titulo, texto = '', cuerpo = '', botones = [['Cancelar', null], ['Aceptar', true, 'acento']], alMontar }) {
