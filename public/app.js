@@ -94,6 +94,9 @@ function aviso(msg, error = false) {
 }
 
 async function api(ruta, { metodo = 'GET', datos } = {}) {
+  const cambia = metodo !== 'GET';
+  if (cambia) marcarGuardando(1);
+  try {
   const r = await fetch(ruta, {
     method: metodo, credentials: 'same-origin',
     headers: datos !== undefined ? { 'Content-Type': 'application/json', 'X-Arca': '1' } : metodo !== 'GET' ? { 'X-Arca': '1' } : {},
@@ -103,6 +106,30 @@ async function api(ruta, { metodo = 'GET', datos } = {}) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
   return j;
+  } finally { if (cambia) marcarGuardando(-1); }
+}
+
+// ---------------------------------------------------------------------------
+// Una sola vez: mientras se guarda algo (cualquier petición que cambia datos),
+// los botones no responden y se ven en gris, y un formulario no se puede
+// enviar dos veces seguidas. Así un doble (o triple) clic en «Guardar» no
+// crea la misma cosa dos veces.
+// ---------------------------------------------------------------------------
+let guardando = 0;
+function marcarGuardando(d) {
+  guardando = Math.max(0, guardando + d);
+  document.documentElement.classList.toggle('guardando', guardando > 0);
+}
+const ultimoEnvio = new WeakMap();
+for (const tipo of ['submit', 'click']) {
+  document.addEventListener(tipo, (e) => {
+    const el = tipo === 'submit' ? e.target : e.target.closest?.('button, [role="button"], a.btn');
+    if (!el) return;
+    const esEnvio = tipo === 'submit' || el.matches('form button:not([type="button"]), [data-restaurar]');
+    const repetido = esEnvio && Date.now() - (ultimoEnvio.get(el) || 0) < 900;
+    if (guardando || repetido) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    if (esEnvio) ultimoEnvio.set(el, Date.now());
+  }, true);
 }
 
 // Diálogo genérico: devuelve una promesa con el valor o null

@@ -599,3 +599,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; heig
 ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 @supports not selector(::-webkit-scrollbar) { * { scrollbar-color: var(--acento) var(--fondo-barra); } }
 .previa { --fondo-barra: #0f0e0d; }
+
+/* Mientras se guarda algo: los botones en gris y sin responder (ver app.js) */
+html.guardando { cursor: progress; }
+html.guardando button, html.guardando .btn, html.guardando [role="button"] { opacity: .5; filter: grayscale(1); cursor: progress; transition: opacity .1s; }
