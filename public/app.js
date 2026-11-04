@@ -95,7 +95,7 @@ function aviso(msg, error = false) {
 
 async function api(ruta, { metodo = 'GET', datos } = {}) {
   const cambia = metodo !== 'GET';
-  if (cambia) marcarGuardando(1);
+  if (cambia) { marcarGuardando(1); tamDir.clear(); }
   try {
   const r = await fetch(ruta, {
     method: metodo, credentials: 'same-origin',
@@ -366,12 +366,36 @@ function iconoFila(e) {
   return `${icono}${img}${extracto}${insignia}`;
 }
 
-// Miniaturas que se rellenan al verse: mosaicos de carpetas y extractos de textos
+// Tamaño de las carpetas: el servidor las recorre enteras, así que se piden de
+// dos en dos (para no dejar sin conexiones a las miniaturas) y se recuerdan
+// hasta que algo cambia.
+const tamDir = new Map();
+let pidiendoTam = 0; const colaTam = [];
+function tamDirDe(r) {
+  if (!tamDir.has(r)) {
+    tamDir.set(r, (async () => {
+      while (pidiendoTam >= 2) await new Promise((ok) => colaTam.push(ok));
+      pidiendoTam++;
+      try { return await api(`/api/tamano?ruta=${encodeURIComponent(r)}`); }
+      finally { pidiendoTam--; colaTam.shift()?.(); }
+    })());
+    tamDir.get(r).catch(() => tamDir.delete(r));
+  }
+  return tamDir.get(r);
+}
+
+// Miniaturas que se rellenan al verse: mosaicos de carpetas, extractos de textos y tamaño de carpetas
 const observador = 'IntersectionObserver' in window ? new IntersectionObserver((ents) => {
   for (const x of ents) if (x.isIntersecting) { observador.unobserve(x.target); rellenar(x.target); }
 }, { rootMargin: '300px 0px' }) : null;
 async function rellenar(el) {
   try {
+    if (el.dataset.tamdir) {
+      const t = await tamDirDe(el.dataset.tamdir);
+      el.textContent = tamano(t.bytes) + (el.dataset.sep ? '\u00a0·\u00a0' : ''); // espacios duros: en una caja inline-block el último se perdería
+      el.title = `${t.archivos.toLocaleString('es-ES')} archivo${t.archivos === 1 ? '' : 's'}`;
+      return;
+    }
     if (el.dataset.muestra) {
       const m = await api(`/api/muestra?ruta=${encodeURIComponent(el.dataset.muestra)}`);
       const ico = el.closest('.ico');
@@ -400,7 +424,7 @@ async function rellenar(el) {
 // el navegador deja libre la conexión y el servidor no las genera
 function cancelarMiniaturas(raiz) {
   raiz.querySelectorAll('img').forEach((i) => { if (!i.complete) { i.removeAttribute('src'); } });
-  raiz.querySelectorAll('[data-muestra], [data-extracto]').forEach((el) => observador?.unobserve(el));
+  raiz.querySelectorAll('[data-muestra], [data-extracto], [data-tamdir]').forEach((el) => observador?.unobserve(el));
 }
 function prepararMiniaturas(raiz) {
   raiz.querySelectorAll('.ico > img').forEach((img) => {
@@ -409,7 +433,7 @@ function prepararMiniaturas(raiz) {
     img.addEventListener('error', () => img.remove(), { once: true });
     if (img.complete) ok();
   });
-  raiz.querySelectorAll('[data-muestra], [data-extracto]').forEach((el) => (observador ? observador.observe(el) : rellenar(el)));
+  raiz.querySelectorAll('[data-muestra], [data-extracto], [data-tamdir]').forEach((el) => (observador ? observador.observe(el) : rellenar(el)));
 }
 
 function pintarLista() {
@@ -427,9 +451,9 @@ function pintarLista() {
         <span class="marcar"><input type="checkbox" ${estado.sel.has(r) ? 'checked' : ''} aria-label="Elegir ${esc(e.nombre)}"></span>
         <span class="ico ${claseDe(e)}">${iconoFila(e)}</span>
         <span class="nombre"><b title="${esc(e.nombre)}">${esc(e.nombre)}${e.protegida ? `<span class="solo-lectura" title="Solo lectura">${I.candado}</span>` : ''}${e.oculta ? `<span class="solo-lectura" title="Oculto">${I.ojoCerrado}</span>` : ''}</b>
-          ${estado.resultados ? `<small>${esc(r.split('/').slice(0, -1).join(' / '))}</small>` : `<small class="solo-movil">${e.dir ? '' : tamano(e.tam) + ' · '}${fecha(e.mod)}</small>`}</span>
-        <span class="tam">${e.dir ? '' : tamano(e.tam)}</span><span class="fecha">${fecha(e.mod)}</span>
-        <small class="meta-cuadricula">${e.dir ? '' : `${tamano(e.tam)} · `}${fechaCorta(e.mod)}</small></div>`;
+          ${estado.resultados ? `<small>${esc(r.split('/').slice(0, -1).join(' / '))}</small>` : `<small class="solo-movil">${e.dir ? `<span data-tamdir="${esc(r)}" data-sep="1"></span>` : tamano(e.tam) + ' · '}${fecha(e.mod)}</small>`}</span>
+        <span class="tam">${e.dir ? `<span data-tamdir="${esc(r)}"></span>` : tamano(e.tam)}</span><span class="fecha">${fecha(e.mod)}</span>
+        <small class="meta-cuadricula">${e.dir ? `<span data-tamdir="${esc(r)}" data-sep="1"></span>` : `${tamano(e.tam)} · `}${fechaCorta(e.mod)}</small></div>`;
     }).join('');
   }
   lista.classList.toggle('seleccionando', estado.sel.size > 0);
@@ -507,7 +531,7 @@ contenido.addEventListener('change', (e) => {
   }
 });
 
-async function recargar() { await Promise.all([cargarDiscos(), abrirCarpeta(estado.ruta)]); }
+async function recargar() { tamDir.clear(); await Promise.all([cargarDiscos(), abrirCarpeta(estado.ruta)]); }
 
 async function accionSeleccion(s) {
   const sel = elegidas(), rutas = sel.map(rutaDe);

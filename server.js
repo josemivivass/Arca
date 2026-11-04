@@ -377,6 +377,55 @@ async function tamanoTotal(abs) {
   }
   return { bytes, archivos };
 }
+// ---------------------------------------------------------------------------
+// Tamaño de las carpetas, para enseñarlo en la lista. Hay que recorrerlas
+// enteras, así que se calcula de dos en dos, se guarda media hora y se olvida
+// en cuanto Arca cambia algo (lo que cambie por fuera, Immich o Syncthing, se
+// ve al caducar). No cuenta la papelera ni las subidas a medias.
+// ---------------------------------------------------------------------------
+const tamanos = new Map();     // abs -> { bytes, archivos, t }
+const calculando = new Map();  // abs -> promesa, para no contar dos veces lo mismo
+let generacionTam = 0;
+function olvidarTamanos() { tamanos.clear(); generacionTam++; }
+let sumando = 0; const turnos = [];
+async function porTurno(fn) {
+  while (sumando >= 2) await new Promise((ok) => turnos.push(ok));
+  sumando++;
+  try { return await fn(); } finally { sumando--; turnos.shift()?.(); }
+}
+async function sumarCarpeta(abs) {
+  let bytes = 0, archivos = 0;
+  const cola = [abs];
+  while (cola.length) {
+    const d = cola.pop();
+    let ents; try { ents = await fsp.readdir(d, { withFileTypes: true }); } catch { continue; }
+    for (let i = 0; i < ents.length; i += 64) {
+      await Promise.all(ents.slice(i, i + 64).map(async (e) => {
+        if (oculto(e.name)) return;
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) { cola.push(p); return; }
+        // primero el await y luego la suma: «bytes += await …» lee bytes antes de
+        // esperar y, con varias a la vez, se pisan
+        let st; try { st = await fsp.lstat(p); } catch { return; }
+        bytes += st.size; archivos++;
+      }));
+    }
+  }
+  return { bytes, archivos };
+}
+function tamanoCarpeta(abs) {
+  const c = tamanos.get(abs);
+  if (c && Date.now() - c.t < 30 * 60 * 1000) return c;
+  if (calculando.has(abs)) return calculando.get(abs);
+  const gen = generacionTam;
+  const p = porTurno(() => sumarCarpeta(abs)).then((r) => {
+    if (gen === generacionTam) { if (tamanos.size > 5000) tamanos.clear(); tamanos.set(abs, { ...r, t: Date.now() }); }
+    return { ...r, t: Date.now() };
+  }).finally(() => calculando.delete(abs));
+  calculando.set(abs, p);
+  return p;
+}
+
 async function copiarRec(origen, destino, t) {
   const st = await fsp.lstat(origen);
   if (st.isDirectory()) {
@@ -399,6 +448,7 @@ function nuevaTarea(tipo, fn, descripcion) {
     t.estado = 'en marcha';
     try { await fn(t); t.estado = 'hecho'; } catch (e) { t.estado = 'error'; t.error = e.message; }
     t.fin = Date.now(); t.hechos = Math.max(t.hechos, t.total);
+    olvidarTamanos();
   });
   return t;
 }
@@ -581,6 +631,7 @@ function enviarCache(req, res, m) {
 // ---------------------------------------------------------------------------
 async function api(req, res, url) {
   const ruta = url.pathname, m = req.method;
+  if (m !== 'GET' && m !== 'HEAD') olvidarTamanos(); // algo va a cambiar
   const ip = req.socket.remoteAddress;
 
   if (ruta === '/api/entrar' && m === 'POST') {
@@ -689,6 +740,12 @@ async function api(req, res, url) {
   if (ruta === '/api/contenido-zip') {
     const o = await resolver(url.searchParams.get('ruta'));
     return json(res, 200, await medios.contenidoZip(o.abs).catch(() => fallo(415, 'No se puede leer este ZIP')));
+  }
+  if (ruta === '/api/tamano') {
+    const o = await resolver(url.searchParams.get('ruta'));
+    if (!(await fsp.stat(o.abs)).isDirectory()) fallo(400, 'No es una carpeta');
+    const { bytes, archivos } = await tamanoCarpeta(o.abs);
+    return json(res, 200, { bytes, archivos }, { 'Cache-Control': 'no-cache' });
   }
   if (ruta === '/api/muestra') {
     const o = await resolver(url.searchParams.get('ruta'));

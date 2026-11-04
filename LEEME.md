@@ -9,6 +9,9 @@ los discos, así que lo que ves en Arca es exactamente lo que hay en el disco.
 - **Navegar** por varios discos a la vez, con el espacio libre de cada uno.
   Vista de lista o cuadrícula (con miniaturas de las fotos), orden por nombre,
   tamaño o fecha, y buscador que mira en la carpeta y en todas las de dentro.
+- **Tamaño de las carpetas**: en la lista y en la cuadrícula. El servidor las
+  recorre enteras (de dos en dos), lo recuerda media hora y lo olvida en cuanto
+  Arca cambia algo.
 - **Miniaturas de todo**: fotos (también HEIC, TIFF, RAW…), vídeos, PDF,
   carátulas de discos, el principio de textos, Word, Excel, presentaciones y
   ZIP, y las carpetas con hasta cuatro cosas de dentro. Sin recortar: cada
