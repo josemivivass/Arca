@@ -10,6 +10,8 @@
 //   ARCA_DISCOS       discos que se ven: "nombre=/ruta;nombre2=/ruta2"
 //   ARCA_SOLO_LECTURA carpetas protegidas (se ven y se copian, pero no se tocan):
 //                     "disco/carpeta;disco/otra/carpeta"
+//   ARCA_EXTRAIBLES   discos que se enchufan y desenchufan (USB): solo se ven
+//                     mientras están montados. "disco;otro"
 //   ARCA_DATOS        donde guarda la contraseña y las sesiones (/datos)
 //   ARCA_USUARIO, ARCA_CLAVE   usuario y contraseña iniciales (solo se usan si
 //                     aún no hay contraseña guardada; luego se cambia en la app)
@@ -41,6 +43,24 @@ const DISCOS = new Map(
     .split(';').map((x) => x.trim()).filter(Boolean)
     .map((x) => { const i = x.indexOf('='); return [x.slice(0, i).trim(), path.resolve(x.slice(i + 1).trim())]; }),
 );
+// Un disco extraíble sin montar es una carpeta vacía del disco del sistema:
+// enseñarlo sería mentir sobre su espacio, y subir ahí llenaría el servidor.
+// Está montado si su carpeta está en otro dispositivo que la de encima.
+const EXTRAIBLES = new Set((process.env.ARCA_EXTRAIBLES || '').split(';').map((x) => x.trim()).filter(Boolean));
+async function montado(raiz) {
+  try { const [a, b] = await Promise.all([fsp.stat(raiz), fsp.stat(path.dirname(raiz))]); return a.dev !== b.dev; } catch { return false; }
+}
+const conectado = async (nombre) => !EXTRAIBLES.has(nombre) || montado(DISCOS.get(nombre));
+async function conectados() {
+  const out = [];
+  for (const [nombre, raiz] of DISCOS) if (await conectado(nombre)) out.push([nombre, raiz]);
+  return out;
+}
+async function raizDe(disco) {
+  const raiz = DISCOS.get(disco); if (!raiz) fallo(404, 'Ese disco no existe');
+  if (!(await conectado(disco))) fallo(404, 'Ese disco no está conectado');
+  return raiz;
+}
 const SOLO_LECTURA = (process.env.ARCA_SOLO_LECTURA || '').split(';').map((x) => normal(x.trim().replace(/^\/+|\/+$/g, '')).toLowerCase()).filter(Boolean);
 
 // ---------------------------------------------------------------------------
@@ -135,7 +155,7 @@ function partes(rel) {
 async function resolver(rel, { existe = true } = {}) {
   const p = partes(rel);
   if (!p.length) fallo(400, 'Falta el disco');
-  const raiz = DISCOS.get(p[0]); if (!raiz) fallo(404, 'Ese disco no existe');
+  const raiz = await raizDe(p[0]);
   if (p.slice(1).some(oculto)) fallo(404, 'No encontrado');
   const abs = path.join(raiz, ...p.slice(1));
   if (abs !== raiz && !abs.startsWith(raiz + path.sep)) fallo(400, 'Ruta no válida');
@@ -155,7 +175,7 @@ function protegida(rel, { contenido = true } = {}) {
 // contenido: true para mover, renombrar o borrar (si dentro hay algo protegido,
 // tampoco se puede); false para crear o subir dentro de una carpeta
 function exigirEscritura(rel, que = 'cambiar', contenido = false) {
-  if (protegida(rel, { contenido })) fallo(403, `Es una carpeta de solo lectura (la usa Immich): no se puede ${que}`);
+  if (protegida(rel, { contenido })) fallo(403, `Es de solo lectura: no se puede ${que}`);
 }
 const validarNombre = (n) => {
   n = normal(String(n || '').trim());
@@ -240,7 +260,7 @@ async function buscar(rel, q, verOcultos = false, max = 300) {
 
 async function espacio() {
   const out = [];
-  for (const [nombre, raiz] of DISCOS) {
+  for (const [nombre, raiz] of await conectados()) {
     try { const s = await fsp.statfs(raiz); out.push({ nombre, total: s.blocks * s.bsize, libre: s.bavail * s.bsize }); }
     catch { out.push({ nombre, total: 0, libre: 0, error: 'No disponible' }); }
   }
@@ -508,7 +528,7 @@ async function aPapelera(rutas) {
   return hechos;
 }
 async function listarPapelera(disco) {
-  const raiz = DISCOS.get(disco); if (!raiz) fallo(404, 'Ese disco no existe');
+  const raiz = await raizDe(disco);
   const dir = path.join(raiz, PAPELERA);
   let ids; try { ids = await fsp.readdir(dir); } catch { return []; }
   const out = [];
@@ -524,7 +544,7 @@ async function listarPapelera(disco) {
 }
 const idValido = (id) => /^\d+-[0-9a-f]{8}$/.test(id) || fallo(400, 'Elemento no válido');
 async function restaurar(disco, ids) {
-  const raiz = DISCOS.get(disco); if (!raiz) fallo(404, 'Ese disco no existe');
+  const raiz = await raizDe(disco);
   const hechos = [];
   for (const id of ids) {
     idValido(id);
@@ -542,7 +562,7 @@ async function restaurar(disco, ids) {
   return hechos;
 }
 async function vaciar(disco, ids = null) {
-  const raiz = DISCOS.get(disco); if (!raiz) fallo(404, 'Ese disco no existe');
+  const raiz = await raizDe(disco);
   const dir = path.join(raiz, PAPELERA);
   let lista; try { lista = await fsp.readdir(dir); } catch { return 0; }
   if (ids) { ids.forEach(idValido); lista = lista.filter((x) => ids.includes(x)); }
@@ -650,7 +670,7 @@ async function api(req, res, url) {
   if (m !== 'GET' && m !== 'HEAD' && req.headers['x-arca'] !== '1') fallo(403, 'Petición no permitida');
 
   if (ruta === '/api/salir' && m === 'POST') { sesiones.delete(cookieDe(req)); guardarSesiones(); return json(res, 200, { ok: true }, { 'Set-Cookie': 'arca=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' }); }
-  if (ruta === '/api/yo') return json(res, 200, { usuario: acceso.usuario, discos: [...DISCOS.keys()], diasPapelera: DIAS_PAPELERA });
+  if (ruta === '/api/yo') return json(res, 200, { usuario: acceso.usuario, discos: (await conectados()).map(([n]) => n), diasPapelera: DIAS_PAPELERA });
   if (ruta === '/api/clave' && m === 'POST') {
     const { actual, nueva } = await leerJson(req);
     if (!iguales(hashClave(actual || '', acceso.sal), acceso.hash)) fallo(403, 'La contraseña actual no es correcta');

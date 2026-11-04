@@ -61,7 +61,8 @@ No tiene dependencias: no hace falta `npm install`. Con Docker hay un
 |----------|----------|-------------|
 | `PORT` | Puerto | `9995` |
 | `ARCA_DISCOS` | Discos que se ven, `nombre=/ruta;nombre=/ruta` | `prueba=./prueba-discos` |
-| `ARCA_SOLO_LECTURA` | Carpetas protegidas, `disco/carpeta;disco/otra` (también todo lo que tienen dentro) | ninguna |
+| `ARCA_SOLO_LECTURA` | Carpetas protegidas, `disco/carpeta;disco/otra` (también todo lo que tienen dentro). Un disco entero también vale: `disco` | ninguna |
+| `ARCA_EXTRAIBLES` | Discos que se enchufan y desenchufan (USB), `disco;otro`: solo se ven mientras están montados. Para que el contenedor vea el disco al montarlo, se monta la carpeta de encima con `rslave` (`/mnt:/discos:rslave`) | ninguno |
 | `ARCA_USUARIO` | Usuario | `arca` |
 | `ARCA_CLAVE` | Contraseña **inicial** | una al azar (sale en el log) |
 | `ARCA_PAPELERA_DIAS` | Días que se guarda lo borrado | `30` |
