@@ -302,7 +302,7 @@ function pintarLateral() {
     const usado = d.total ? (d.total - d.libre) / d.total : 0;
     return `<a class="disco ${!r.papelera && d.nombre === actual ? 'activo' : ''}" href="#/${encodeURIComponent(d.nombre)}" data-soltar="${esc(d.nombre)}">
       <b>${I.disco}${esc(d.nombre)}</b><div class="barra"><i class="${usado > 0.92 ? 'lleno' : ''}" style="width:${(usado * 100).toFixed(1)}%"></i></div>
-      <small>${d.error ? esc(d.error) : `${tamano(d.libre)} libres de ${tamano(d.total)}`}</small></a>`;
+      <small>${d.error ? esc(d.error) : `${tamano(d.total - d.libre)} ocupados de ${tamano(d.total)}`}</small></a>`;
   }).join('')}
   ${estado.discos.map((d) => `<a class="enlace-lateral ${r.papelera === d.nombre ? 'activo' : ''}" href="#papelera/${encodeURIComponent(d.nombre)}">${I.papelera}Papelera de ${esc(d.nombre)}</a>`).join('')}`;
 }
@@ -453,7 +453,7 @@ function pintarLista() {
         <span class="nombre"><b title="${esc(e.nombre)}">${esc(e.nombre)}${e.protegida ? `<span class="solo-lectura" title="Solo lectura">${I.candado}</span>` : ''}${e.oculta ? `<span class="solo-lectura" title="Oculto">${I.ojoCerrado}</span>` : ''}</b>
           ${estado.resultados ? `<small>${esc(r.split('/').slice(0, -1).join(' / '))}</small>` : `<small class="solo-movil">${e.dir ? `<span data-tamdir="${esc(r)}" data-sep="1"></span>` : tamano(e.tam) + ' · '}${fecha(e.mod)}</small>`}</span>
         <span class="tam">${e.dir ? `<span data-tamdir="${esc(r)}"></span>` : tamano(e.tam)}</span><span class="fecha">${fecha(e.mod)}</span>
-        <small class="meta-cuadricula">${e.dir ? `<span data-tamdir="${esc(r)}" data-sep="1"></span>` : `${tamano(e.tam)} · `}${fechaCorta(e.mod)}</small></div>`;
+        <small class="meta-cuadricula"><span>${fechaCorta(e.mod)}</span>${e.dir ? `<span data-tamdir="${esc(r)}"></span>` : `<span>${tamano(e.tam)}</span>`}</small></div>`;
     }).join('');
   }
   lista.classList.toggle('seleccionando', estado.sel.size > 0);

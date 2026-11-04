@@ -354,13 +354,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .fila-arch .nombre small { font-size: .72rem; }
 
 .lista.cuadricula { grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; padding: 12px; }
-.cuadricula .fila-arch { padding: 6px 6px 8px; gap: 6px; align-content: start; }
+.cuadricula .fila-arch { padding: 6px 6px 8px; gap: 6px; align-content: start; grid-template-rows: auto 1fr auto; }
+.cuadricula .fila-arch .nombre { align-self: start; }
 .cuadricula .fila-arch .ico { width: 100%; height: auto; aspect-ratio: 1; background: var(--superficie-2); }
 .cuadricula .fila-arch .nombre small.solo-movil { display: none; }
 .cuadricula .fila-arch .ico > svg { width: 40px; height: 40px; }
 .cuadricula .fila-arch .ico.carpeta { background: var(--acento-suave); }
 .cuadricula .fila-arch .ico.carpeta > svg { width: 56px; height: 56px; }
-.cuadricula .fila-arch .meta-cuadricula { display: block; color: var(--texto-suave); font-size: .7rem; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: -2px; }
+/* Abajo del todo, aunque el nombre ocupe una o dos líneas: fecha a la izquierda y tamaño a la derecha */
+.cuadricula .fila-arch .meta-cuadricula { display: flex; justify-content: space-between; align-items: flex-end; gap: 6px; color: var(--texto-suave); font-size: .7rem; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: -2px; }
 .cuadricula .fila-arch .insignia { display: flex; position: absolute; right: 6px; bottom: 6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(15, 14, 13, .62); color: #fff; align-items: center; justify-content: center; opacity: 0; }
 .cuadricula .fila-arch .insignia svg { width: 12px; height: 12px; }
 .cuadricula .fila-arch .ico.con-imagen .insignia { opacity: 1; }
