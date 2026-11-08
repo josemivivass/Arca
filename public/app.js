@@ -44,6 +44,7 @@ const I = {
   izquierda: svg('<path d="m15 18-6-6 6-6"/>'),
   derecha: svg('<path d="m9 18 6-6-6-6"/>'),
   arriba: svg('<path d="m18 15-6-6-6 6"/>'),
+  abajo: svg('<path d="m6 9 6 6 6-6"/>'),
   menu: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'),
   clave: svg('<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/>'),
   salir: svg('<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3"/>'),
@@ -628,7 +629,7 @@ function pintarTareas() {
   panelTareas.hidden = false;
   const plegado = panelTareas.classList.contains('plegado');
   panelTareas.innerHTML = `<header><span>${activas ? `${activas} en marcha` : 'Terminado'}</span>
-    <button type="button" class="btn-icono" data-t="plegar" aria-label="${plegado ? 'Desplegar' : 'Plegar'}">${plegado ? I.arriba : `<span style="display:inline-flex;transform:rotate(180deg)">${I.arriba}</span>`}</button>
+    <button type="button" class="btn-icono" data-t="plegar" aria-label="${plegado ? 'Desplegar' : 'Plegar'}">${plegado ? I.arriba : I.abajo}</button>
     ${activas ? '' : `<button type="button" class="btn-icono" data-t="cerrar" aria-label="Cerrar">${I.cerrar}</button>`}</header>
     <div class="lista-tareas">${lista.slice().reverse().map((t) => {
       const pct = t.total ? Math.min(100, (t.hechos / t.total) * 100) : t.estado === 'hecho' ? 100 : 0;
@@ -691,6 +692,10 @@ async function subirArchivos(items, carpeta) {
   siguienteSubida();
 }
 let omitidosTotal = 0;
+// Las subidas van desde este navegador: recargar o cerrar la página las corta
+addEventListener('beforeunload', (e) => {
+  if (subidas.some((x) => x.estado === 'en marcha' || x.estado === 'esperando')) { e.preventDefault(); e.returnValue = ''; }
+});
 function siguienteSubida() {
   while (subiendo < 2) {
     const s = subidas.find((x) => x.estado === 'esperando'); if (!s) break;
