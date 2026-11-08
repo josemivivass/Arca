@@ -594,18 +594,44 @@ async function subir(req, url) {
   try {
     await pipeline(req, fs.createWriteStream(temporal, { flags: 'wx' }));
     if (lon && (await fsp.stat(temporal)).size !== lon) fallo(400, 'La subida llegó incompleta');
+    // Si ya hay uno con ese nombre: «copia» lo guarda como «nombre (2)» (lo de
+    // siempre); «reemplazar» manda el antiguo a la papelera y deja el nuevo
+    if (url.searchParams.get('siExiste') === 'reemplazar') {
+      const rel = [carpeta.rel, ...sub, nombre].join('/');
+      let st = null; try { st = await fsp.lstat(path.join(dir, nombre)); } catch {}
+      if (st && st.isFile()) await aPapelera([rel]);
+    }
     const final = await libre(dir, nombre);
     await fsp.rename(temporal, path.join(dir, final));
     return [carpeta.rel, ...sub, final].join('/');
   } catch (e) { await fsp.rm(temporal, { force: true }).catch(() => {}); throw e; }
 }
-// Restos de subidas cortadas (más de un día)
+// Antes de subir: de cada archivo, si ya está igual (mismo nombre y tamaño),
+// si hay otro con ese nombre pero distinto tamaño, o si es nuevo
+async function comprobarSubida({ carpeta: c, archivos }) {
+  if (!Array.isArray(archivos) || archivos.length > 5000) fallo(400, 'Lista no válida');
+  const carpeta = await resolver(c);
+  const estados = [];
+  for (const a of archivos) {
+    let e = 'nuevo';
+    try {
+      const sub = partes(a.sub || '').map(validarNombre), nombre = validarNombre(a.nombre);
+      const st = await fsp.lstat(path.join(carpeta.abs, ...sub, nombre));
+      e = st.isFile() && st.size === Number(a.tam) ? 'igual' : 'distinto';
+    } catch { /* no está */ }
+    estados.push(e);
+  }
+  return estados;
+}
+
+// Restos de subidas cortadas (más de un día), en todas las subcarpetas
 async function limpiarSubidas(dir, nivel = 0) {
   if (nivel > 6) return;
   let ents; try { ents = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
   for (const e of ents) {
     const p = path.join(dir, e.name);
     if (e.name.startsWith(SUBIENDO)) { try { if (Date.now() - (await fsp.stat(p)).mtimeMs > 86400000) await fsp.rm(p, { force: true }); } catch {} }
+    else if (e.isDirectory() && e.name !== PAPELERA) await limpiarSubidas(p, nivel + 1);
   }
 }
 
@@ -780,6 +806,7 @@ async function api(req, res, url) {
     return enviarZip(res, lista, nombre);
   }
   if (ruta === '/api/subir' && m === 'PUT') return json(res, 200, { ruta: await subir(req, url) });
+  if (ruta === '/api/subir/comprobar' && m === 'POST') return json(res, 200, { estados: await comprobarSubida(await leerJson(req, 4 << 20)) });
   if (ruta === '/api/carpeta' && m === 'POST') {
     const { ruta: r, nombre } = await leerJson(req);
     const o = await resolver(r); exigirEscritura(o.rel, 'crear carpetas ahí');

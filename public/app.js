@@ -647,19 +647,57 @@ panelTareas.addEventListener('click', (e) => {
 
 // Sube en orden, de dos en dos
 let subiendo = 0;
-function subirArchivos(items, carpeta) {
+async function subirArchivos(items, carpeta) {
   if (!items.length) return;
   if (estado.protegida && carpeta === estado.ruta) return aviso('Esta carpeta es de solo lectura', true);
-  for (const it of items) subidas.push({ id: Math.random().toString(36).slice(2), nombre: it.sub ? `${it.sub}/${it.archivo.name}` : it.archivo.name, total: it.archivo.size, hechos: 0, estado: 'esperando', archivo: it.archivo, sub: it.sub, carpeta });
+  // Antes de subir: ¿cuáles ya están? (mismo nombre y tamaño, o mismo nombre y otro tamaño)
+  let estados = [];
+  try {
+    for (let i = 0; i < items.length; i += 2000) {
+      const trozo = items.slice(i, i + 2000).map((it) => ({ sub: it.sub || '', nombre: it.archivo.name, tam: it.archivo.size }));
+      estados.push(...(await api('/api/subir/comprobar', { metodo: 'POST', datos: { carpeta, archivos: trozo } })).estados);
+    }
+  } catch (err) { estados = []; }
+  const iguales = estados.filter((e) => e === 'igual').length, distintos = estados.filter((e) => e === 'distinto').length;
+  let conIguales = 'omitir', conDistintos = 'copia';
+  if (iguales || distintos) {
+    const opcion = (nombre, valor, texto, marcado) => `<label><input type="radio" name="${nombre}" value="${valor}" ${marcado ? 'checked' : ''}>${texto}</label>`;
+    const eleccion = await dialogo({
+      titulo: 'Algunos archivos ya están',
+      texto: `De ${items.length.toLocaleString('es-ES')} archivo(s) que vas a subir:`,
+      cuerpo: `
+        ${iguales ? `<p class="ayuda"><b>${iguales.toLocaleString('es-ES')}</b> ya están aquí, con el mismo nombre y el mismo tamaño.</p>
+        <div class="segmentado" style="margin-bottom:14px">${opcion('iguales', 'omitir', 'Omitirlos', true)}${opcion('iguales', 'copia', 'Subirlos otra vez como copia «(2)»')}</div>` : ''}
+        ${distintos ? `<p class="ayuda"><b>${distintos.toLocaleString('es-ES')}</b> tienen el mismo nombre que uno que ya está, pero distinto tamaño.</p>
+        <div class="segmentado">${opcion('distintos', 'copia', 'Guardar como copia «(2)»', true)}${opcion('distintos', 'reemplazar', 'Reemplazar (el antiguo va a la papelera)')}${opcion('distintos', 'omitir', 'Omitirlos')}</div>` : ''}`,
+      botones: [['Cancelar', null], ['Subir', (v) => ({
+        iguales: $('input[name=iguales]:checked', v)?.value || 'omitir',
+        distintos: $('input[name=distintos]:checked', v)?.value || 'copia',
+      }), 'acento']],
+    });
+    if (!eleccion) return;
+    conIguales = eleccion.iguales; conDistintos = eleccion.distintos;
+  }
+  let omitidos = 0;
+  items.forEach((it, k) => {
+    const e = estados[k] || 'nuevo';
+    const accion = e === 'igual' ? conIguales : e === 'distinto' ? conDistintos : 'copia';
+    if (accion === 'omitir') { omitidos++; return; }
+    subidas.push({ id: Math.random().toString(36).slice(2), nombre: it.sub ? `${it.sub}/${it.archivo.name}` : it.archivo.name, total: it.archivo.size, hechos: 0, estado: 'esperando', archivo: it.archivo, sub: it.sub, carpeta, siExiste: accion === 'reemplazar' ? 'reemplazar' : '' });
+  });
+  if (omitidos) omitidosTotal += omitidos;
+  if (omitidos === items.length) { aviso(`Ya estaba todo: ${omitidos.toLocaleString('es-ES')} archivo(s) omitido(s)`); omitidosTotal = 0; return; }
   pintarTareas();
   siguienteSubida();
 }
+let omitidosTotal = 0;
 function siguienteSubida() {
   while (subiendo < 2) {
     const s = subidas.find((x) => x.estado === 'esperando'); if (!s) break;
     subiendo++; s.estado = 'en marcha';
     const xhr = new XMLHttpRequest(); s.xhr = xhr;
     const q = new URLSearchParams({ carpeta: s.carpeta, nombre: s.archivo.name }); if (s.sub) q.set('subcarpeta', s.sub);
+    if (s.siExiste) q.set('siExiste', s.siExiste);
     xhr.open('PUT', `/api/subir?${q}`);
     xhr.setRequestHeader('X-Arca', '1');
     xhr.upload.onprogress = (e) => { s.hechos = e.loaded; pintarTareasPronto(); };
@@ -673,7 +711,9 @@ function siguienteSubida() {
       pintarTareas();
       if (!subidas.some((x) => x.estado === 'esperando' || x.estado === 'en marcha')) {
         const mal = subidas.filter((x) => x.estado === 'error' && !x.cancelada).length;
-        aviso(mal ? `${mal} subida(s) con error` : 'Subida terminada', !!mal);
+        const omit = omitidosTotal ? ` · ${omitidosTotal.toLocaleString('es-ES')} ya estaban y se han omitido` : '';
+        omitidosTotal = 0;
+        aviso(mal ? `${mal} subida(s) con error${omit}` : `Subida terminada${omit}`, !!mal);
         if (s.carpeta === estado.ruta || estado.ruta.startsWith(s.carpeta)) recargar();
       }
       siguienteSubida();

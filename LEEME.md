@@ -27,8 +27,11 @@ los discos, así que lo que ves en Arca es exactamente lo que hay en el disco.
   pista de audio, subtítulos (los de dentro del vídeo y los `.srt`/`.ass`
   sueltos con el mismo nombre), y recuerda por dónde ibas.
 - **Subir** archivos o carpetas enteras, arrastrándolos a la página o con los
-  botones. Con barra de progreso; si ya existe un archivo con ese nombre se
-  guarda como «nombre (2)», nunca se pisa nada.
+  botones. Con barra de progreso. Antes de empezar mira qué hay ya: si algunos
+  archivos ya están (mismo nombre y tamaño) pregunta si omitirlos (lo normal
+  al repetir una subida que se cortó) o subirlos como copia; y si hay alguno
+  con el mismo nombre pero distinto tamaño, si guardarlo como «nombre (2)»,
+  reemplazar el antiguo (que va a la papelera) u omitirlo.
 - **Descargar** un archivo, o varios / carpetas enteras en un ZIP que se va
   generando mientras se descarga (sirve para carpetas de cientos de GB).
 - **Mover, copiar, renombrar** y crear carpetas. También entre discos: dentro
@@ -103,7 +106,7 @@ y, si el aviso no llega, el servidor revisa este repositorio cada 5 minutos.
 - `medios.js`: miniaturas, vistas, información de vídeos y audios, conversión
   al vuelo y subtítulos. Usa `ffmpeg`, `vipsthumbnail` y `pdftoppm` si están
   (en Docker van en la imagen); si falta alguno, esas miniaturas no se hacen. Las subidas se escriben en un archivo temporal oculto y se renombran
-  al terminar (si se corta, no queda un archivo a medias). El ZIP se escribe
+  al terminar (si se corta, no queda un archivo a medias; los restos se borran al día siguiente, en cualquier subcarpeta). El ZIP se escribe
   en flujo (con ZIP64 para archivos de más de 4 GB). Las miniaturas salen de
   la que lleva dentro cada foto JPG (EXIF), sin procesar la imagen.
 - `public/`: la web (`app.js`, `visor.js` para abrir los archivos, `styles.css`, `index.html`), el service worker
