@@ -616,11 +616,14 @@ let tareasServidor = [];
 let tCerrarTareas = null;
 let sondeo = null;
 
+// Velocidad de subida (media de los últimos segundos) para calcular cuánto queda
+let muestraVel = null, velocidad = 0;
 function pintarTareas() {
+  const ORDEN = { 'en marcha': 0, error: 1, esperando: 2, hecho: 3 };
   const lista = [
-    ...subidas.map((s) => ({ ...s, tipo: 'subir', descripcion: `Subir «${s.nombre}»` })),
+    ...subidas.map((s) => ({ ...s, tipo: 'subir' })),
     ...tareasServidor,
-  ];
+  ].map((t, k) => ({ t, k })).sort((a, b) => (ORDEN[a.t.estado] ?? 2) - (ORDEN[b.t.estado] ?? 2) || (a.t.estado === 'hecho' ? b.k - a.k : a.k - b.k)).map((x) => x.t);
   if (!lista.length) { panelTareas.hidden = true; return; }
   const activas = lista.filter((t) => t.estado === 'en marcha' || t.estado === 'esperando').length;
   // Si todo ha ido bien, el panel se cierra solo al rato
@@ -628,16 +631,41 @@ function pintarTareas() {
   if (!activas && !lista.some((t) => t.estado === 'error')) tCerrarTareas = setTimeout(() => { subidas.length = 0; tareasServidor = []; vistas.clear(); panelTareas.hidden = true; }, 5000);
   panelTareas.hidden = false;
   const plegado = panelTareas.classList.contains('plegado');
-  panelTareas.innerHTML = `<header><span>${activas ? `${activas} en marcha` : 'Terminado'}</span>
+
+  // Lo que va de todas las subidas juntas, y cuánto queda
+  const vivas = subidas.filter((x) => !x.cancelada);
+  const total = vivas.reduce((a, x) => a + x.total, 0), hechos = vivas.reduce((a, x) => a + (x.estado === 'hecho' ? x.total : x.estado === 'error' ? x.total : x.hechos), 0);
+  const ahora = Date.now();
+  if (muestraVel && ahora - muestraVel.t > 900) {
+    const v = Math.max(0, (hechos - muestraVel.b) / ((ahora - muestraVel.t) / 1000));
+    velocidad = velocidad ? velocidad * 0.8 + v * 0.2 : v; muestraVel = { t: ahora, b: hechos };
+  } else if (!muestraVel) muestraVel = { t: ahora, b: hechos };
+  let resumen = '';
+  if (vivas.some((x) => x.estado === 'en marcha' || x.estado === 'esperando') && total) {
+    const queda = velocidad > 1024 ? (total - hechos) / velocidad : null;
+    const tiempo = queda == null ? '' : queda < 90 ? ' · menos de 2 min' : queda < 3600 ? ` · quedan ${Math.round(queda / 60)} min` : ` · quedan ${Math.floor(queda / 3600)} h ${Math.round((queda % 3600) / 60)} min`;
+    resumen = `<div class="tareas-resumen"><small>${tamano(hechos)} de ${tamano(total)}${velocidad > 1024 ? ` · ${tamano(velocidad)}/s` : ''}${tiempo}</small><progress max="100" value="${((hechos / total) * 100).toFixed(1)}"></progress></div>`;
+  } else { muestraVel = null; velocidad = 0; }
+
+  // Con miles de archivos solo se pintan los primeros (los que están subiendo van arriba)
+  const MAX = 150, mostradas = lista.slice(0, MAX), resto = lista.length - mostradas.length;
+  const caja = $('.lista-tareas', panelTareas), arriba = caja ? caja.scrollTop : 0;
+  panelTareas.innerHTML = `<header><span>${activas ? `${activas.toLocaleString('es-ES')} en marcha` : 'Terminado'}</span>
     <button type="button" class="btn-icono" data-t="plegar" aria-label="${plegado ? 'Desplegar' : 'Plegar'}">${plegado ? I.arriba : I.abajo}</button>
     ${activas ? '' : `<button type="button" class="btn-icono" data-t="cerrar" aria-label="Cerrar">${I.cerrar}</button>`}</header>
-    <div class="lista-tareas">${lista.slice().reverse().map((t) => {
+    ${resumen}
+    <div class="lista-tareas">${mostradas.map((t) => {
       const pct = t.total ? Math.min(100, (t.hechos / t.total) * 100) : t.estado === 'hecho' ? 100 : 0;
-      const info = t.estado === 'error' ? t.error : t.estado === 'hecho' ? 'Hecho' : t.estado === 'esperando' ? 'En espera' : `${tamano(t.hechos)} de ${tamano(t.total)}${t.actual ? ` · ${t.actual}` : ''}`;
-      return `<div class="tarea ${t.estado === 'error' ? 'error' : ''}"><div class="linea"><span title="${esc(t.descripcion)}">${esc(t.descripcion)}</span>
+      const info = t.estado === 'error' ? t.error : t.estado === 'hecho' ? 'Hecho' : t.estado === 'esperando' ? `En espera · ${tamano(t.total)}` : `${tamano(t.hechos)} de ${tamano(t.total)}${t.tipo === 'subir' && t.total ? ` · ${Math.floor(pct)} %` : ''}${t.actual ? ` · ${t.actual}` : ''}`;
+      const titulo = t.tipo === 'subir' ? `Subir «${t.archivo.name}»` : t.descripcion;
+      const donde = t.tipo === 'subir' ? [t.carpeta, t.sub].filter(Boolean).join('/') : '';
+      return `<div class="tarea ${t.estado === 'error' ? 'error' : ''} ${t.estado === 'en marcha' ? 'activa' : ''}"><div class="linea"><span title="${esc(titulo)}">${esc(titulo)}</span>
         ${t.tipo === 'subir' && (t.estado === 'en marcha' || t.estado === 'esperando') ? `<button type="button" class="btn-icono" data-t="cancelar:${t.id}" aria-label="Cancelar">${I.cerrar}</button>` : ''}</div>
-        <small>${esc(info)}</small>${t.estado === 'en marcha' || t.estado === 'esperando' ? `<progress max="100" value="${pct.toFixed(1)}"></progress>` : ''}</div>`;
-    }).join('')}</div>`;
+        ${donde ? `<div class="ruta" title="${esc(donde)}">en ${esc(donde)}</div>` : ''}
+        <small>${esc(info)}</small>${t.estado === 'en marcha' ? `<progress max="100" value="${pct.toFixed(1)}"></progress>` : ''}</div>`;
+    }).join('')}${resto > 0 ? `<div class="tarea"><small>y ${resto.toLocaleString('es-ES')} más en espera</small></div>` : ''}</div>`;
+  // Repintar no mueve la lista: se queda donde estabas mirando
+  $('.lista-tareas', panelTareas).scrollTop = arriba;
 }
 panelTareas.addEventListener('click', (e) => {
   const t = e.target.closest('[data-t]')?.dataset.t; if (!t) return;
@@ -651,6 +679,9 @@ let subiendo = 0;
 async function subirArchivos(items, carpeta) {
   if (!items.length) return;
   if (estado.protegida && carpeta === estado.ruta) return aviso('Esta carpeta es de solo lectura', true);
+  // En orden de carpeta y nombre (el navegador los da desordenados)
+  const orden = new Intl.Collator('es', { numeric: true, sensitivity: 'base' });
+  items = items.slice().sort((a, b) => orden.compare(a.sub || '', b.sub || '') || orden.compare(a.archivo.name, b.archivo.name));
   // Antes de subir: ¿cuáles ya están? (mismo nombre y tamaño, o mismo nombre y otro tamaño)
   let estados = [];
   try {

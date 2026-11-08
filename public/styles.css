@@ -608,3 +608,11 @@ html.guardando button, html.guardando .btn, html.guardando [role="button"] { opa
 
 /* Tamaño de carpetas: se rellena al verse; necesita caja para que el observador lo vea */
 [data-tamdir] { display: inline-block; min-width: 1px; min-height: 1em; }
+
+/* Panel de subidas: nombre del archivo primero, la carpeta debajo; resumen de todo arriba */
+.tarea .ruta { color: var(--texto-suave); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tarea.activa .linea span { font-weight: 600; }
+.tareas-resumen { padding: 8px 14px 10px; border-bottom: 1px solid var(--borde); }
+.tareas-resumen small { color: var(--texto-suave); font-variant-numeric: tabular-nums; font-size: .82rem; }
+.tareas-resumen progress { width: 100%; height: 6px; accent-color: var(--acento); margin-top: 4px; display: block; }
+.tareas.plegado .tareas-resumen { border-bottom: 0; }
